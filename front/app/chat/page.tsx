@@ -56,7 +56,13 @@ export default function ChatPage() {
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to fetch");
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        console.error(`API Error (${response.status}):`, errText);
+        throw new Error(
+          `Failed to fetch (${response.status}): ${errText || "no body"}`
+        );
+      }
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
