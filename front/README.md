@@ -1,36 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI コンパニオン フロントエンド
 
-## Getting Started
+このプロジェクトは AI コンパニオン開発プロジェクトのフロントエンドです。
 
-First, run the development server:
+## 技術スタック
+
+- **フレームワーク**: Next.js 15.5.4
+- **言語**: TypeScript
+- **認証・データベース**: Supabase
+- **スタイリング**: Tailwind CSS
+- **AI 連携**: Vercel AI SDK
+
+## セットアップ
+
+### 1. 依存関係のインストール
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+yarn install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. 環境変数の設定
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`.env.example` をコピーして `.env.local` を作成し、Supabase の情報を設定してください。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+cp .env.example .env.local
+```
 
-## Learn More
+`.env.local` を編集：
 
-To learn more about Next.js, take a look at the following resources:
+```
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. Supabase のセットアップ
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. [Supabase](https://supabase.com/) でプロジェクトを作成
+2. SQL Editor で `supabase/migrations/001_create_users_table.sql` を実行
+3. Project Settings から URL と Anon Key を取得して `.env.local` に設定
 
-## Deploy on Vercel
+### 4. 開発サーバーの起動
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+yarn dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+ブラウザで [http://localhost:3000](http://localhost:3000) を開いて確認できます。
+
+## 実装済み機能
+
+### 認証機能
+
+- ✅ 新規登録（`/signup`）
+- ⏳ ログイン（未実装）
+- ⏳ パスワードリセット（未実装）
+
+### その他の機能
+
+- ⏳ AI コンパニオンとの対話（未実装）
+- ⏳ キャラクター設定（未実装）
+
+## プロジェクト構造
+
+```
+front/
+├── app/                    # Next.js App Router
+│   ├── (auth)/            # 認証関連ページ
+│   │   └── signup/        # 新規登録ページ
+│   └── chat/              # 対話ページ（未実装）
+├── components/            # React コンポーネント
+│   └── auth/             # 認証関連コンポーネント
+├── lib/                   # ユーティリティとロジック
+│   ├── actions/          # Server Actions
+│   ├── supabase/         # Supabase クライアント
+│   └── types/            # 型定義
+└── supabase/             # Supabase 関連
+    └── migrations/       # データベースマイグレーション
+```
+
+## Server Actions について
+
+このプロジェクトでは、環境変数の保護とセキュリティのため、認証処理に Next.js の Server Actions を使用しています。
+
+- `lib/actions/auth.ts`: 認証関連の Server Actions
+- `lib/supabase/server.ts`: サーバー専用 Supabase クライアント
+
+これにより、Supabase の API キーがクライアントに公開されることを防いでいます。
+
+## 開発ルール
+
+プロジェクトの開発ルールは以下のファイルを参照してください：
+
+- `.cursor/rules/coding-rules.mdc`
+- `.cursor/rules/dev-rules/nextjs.mdc`
