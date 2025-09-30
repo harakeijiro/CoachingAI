@@ -5,6 +5,7 @@ import {
   SignUpData,
   SignInData,
   PasswordResetData,
+  UpdatePasswordData,
   AuthResponse,
 } from "@/lib/types/auth";
 import { revalidatePath } from "next/cache";
@@ -172,6 +173,78 @@ export async function resetPassword(
     };
   } catch (error) {
     console.error("Unexpected error during password reset:", error);
+    const errorMessage =
+      error instanceof Error
+        ? translateAuthError(error.message)
+        : "予期しないエラーが発生しました";
+    return {
+      success: false,
+      message: errorMessage,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * パスワード更新
+ * Server Action として実装し、環境変数を保護
+ * パスワードリセットメールのリンクから遷移した際に使用
+ */
+export async function updatePassword(
+  data: UpdatePasswordData
+): Promise<AuthResponse> {
+  try {
+    const supabase = await createServerClient();
+
+    // 現在のセッションを確認
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      console.error("User authentication error:", userError);
+      return {
+        success: false,
+        message:
+          "認証に失敗しました。もう一度パスワードリセットメールを送信してください。",
+        error: userError?.message || "User not authenticated",
+      };
+    }
+
+    // パスワードの長さをチェック
+    if (data.password.length < 6) {
+      return {
+        success: false,
+        message: "パスワードは6文字以上である必要があります",
+        error: "Password too short",
+      };
+    }
+
+    // Supabase Auth でパスワードを更新
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: data.password,
+    });
+
+    if (updateError) {
+      console.error("Password update error:", updateError);
+      const errorMessage = translateAuthError(updateError.message);
+      return {
+        success: false,
+        message: errorMessage,
+        error: updateError.message,
+      };
+    }
+
+    // パスを再検証してキャッシュをクリア
+    revalidatePath("/");
+
+    return {
+      success: true,
+      message: "パスワードが正常に更新されました",
+    };
+  } catch (error) {
+    console.error("Unexpected error during password update:", error);
     const errorMessage =
       error instanceof Error
         ? translateAuthError(error.message)

@@ -1,0 +1,314 @@
+-- シードデータの投入
+-- 開発・テスト環境用のサンプルデータ
+-- 注意: 本番環境では実行しないこと
+
+-- ==========================================
+-- 1. テストユーザーデータ
+-- ==========================================
+-- 注意: 実際には Supabase Auth 経由でユーザーを作成する必要があります
+-- このシードデータは、auth.users に既にテストユーザーが存在する前提です
+-- 以下のUUIDは例です。実際の開発環境のUUIDに置き換えてください
+
+-- テストユーザー1のプロファイル
+-- user_id: '00000000-0000-0000-0000-000000000001' (例)
+INSERT INTO public.users (user_id, name, birthdate, created_at, updated_at)
+VALUES (
+  '00000000-0000-0000-0000-000000000001',
+  '山田太郎',
+  '1990-05-15',
+  NOW(),
+  NOW()
+) ON CONFLICT (user_id) DO NOTHING;
+
+-- テストユーザー2のプロファイル
+-- user_id: '00000000-0000-0000-0000-000000000002' (例)
+INSERT INTO public.users (user_id, name, birthdate, created_at, updated_at)
+VALUES (
+  '00000000-0000-0000-0000-000000000002',
+  '佐藤花子',
+  '1995-08-20',
+  NOW(),
+  NOW()
+) ON CONFLICT (user_id) DO NOTHING;
+
+-- ==========================================
+-- 2. キャラクターデータ
+-- ==========================================
+
+-- キャラクター1: 明るい性格 (ユーザー1所有)
+INSERT INTO public.characters (
+  character_id,
+  user_id,
+  character_name,
+  personality_type,
+  model_path,
+  display_size,
+  volume,
+  response_speed,
+  created_at,
+  updated_at
+)
+VALUES (
+  '10000000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000001',
+  'サクラ',
+  '明るい',
+  '/models/sakura.glb',
+  100,
+  70,
+  60,
+  NOW(),
+  NOW()
+) ON CONFLICT (character_id) DO NOTHING;
+
+-- キャラクター2: 冷静な性格 (ユーザー1所有)
+INSERT INTO public.characters (
+  character_id,
+  user_id,
+  character_name,
+  personality_type,
+  model_path,
+  display_size,
+  volume,
+  response_speed,
+  created_at,
+  updated_at
+)
+VALUES (
+  '10000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000001',
+  'レイ',
+  '冷静',
+  '/models/rei.glb',
+  90,
+  50,
+  40,
+  NOW(),
+  NOW()
+) ON CONFLICT (character_id) DO NOTHING;
+
+-- キャラクター3: 優しい性格 (ユーザー2所有)
+INSERT INTO public.characters (
+  character_id,
+  user_id,
+  character_name,
+  personality_type,
+  model_path,
+  display_size,
+  volume,
+  response_speed,
+  created_at,
+  updated_at
+)
+VALUES (
+  '10000000-0000-0000-0000-000000000003',
+  '00000000-0000-0000-0000-000000000002',
+  'ユキ',
+  '優しい',
+  '/models/yuki.glb',
+  95,
+  60,
+  50,
+  NOW(),
+  NOW()
+) ON CONFLICT (character_id) DO NOTHING;
+
+-- ==========================================
+-- 3. 会話ログデータ
+-- ==========================================
+
+-- サクラとの会話ログ
+INSERT INTO public.conversations (
+  conversation_id,
+  character_id,
+  user_input,
+  character_response,
+  user_emotion,
+  timestamp
+)
+VALUES
+  (
+    '20000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'おはよう！今日はいい天気だね',
+    'おはよう！本当に素敵な天気だね！今日は何か楽しいことしようよ！',
+    '喜び',
+    NOW() - INTERVAL '2 hours'
+  ),
+  (
+    '20000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000001',
+    '最近、仕事が忙しくて疲れちゃった',
+    'そっか...大変だったね。でも、きっと頑張った分、いいことあるよ！応援してるよ！',
+    '疲労',
+    NOW() - INTERVAL '1 hour'
+  ),
+  (
+    '20000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000001',
+    '今日のランチは何にしようかな',
+    'わぁ、楽しみだね！好きな食べ物選ぼうよ！何が食べたい気分？',
+    '通常',
+    NOW() - INTERVAL '30 minutes'
+  )
+ON CONFLICT (conversation_id) DO NOTHING;
+
+-- レイとの会話ログ
+INSERT INTO public.conversations (
+  conversation_id,
+  character_id,
+  user_input,
+  character_response,
+  user_emotion,
+  timestamp
+)
+VALUES
+  (
+    '20000000-0000-0000-0000-000000000004',
+    '10000000-0000-0000-0000-000000000002',
+    'この問題、どう解決したらいいかな',
+    'まず状況を整理してみましょう。問題の本質は何でしょうか？',
+    '困惑',
+    NOW() - INTERVAL '3 hours'
+  ),
+  (
+    '20000000-0000-0000-0000-000000000005',
+    '10000000-0000-0000-0000-000000000002',
+    '新しいプロジェクトが始まるんだ',
+    '素晴らしいですね。計画的に進めることが成功の鍵です。',
+    '通常',
+    NOW() - INTERVAL '1 hour 30 minutes'
+  ),
+  (
+    '20000000-0000-0000-0000-000000000006',
+    '10000000-0000-0000-0000-000000000002',
+    'ありがとう、助かったよ',
+    'どういたしまして。論理的に考えれば、多くの問題は解決できます。',
+    '感謝',
+    NOW() - INTERVAL '45 minutes'
+  )
+ON CONFLICT (conversation_id) DO NOTHING;
+
+-- ユキとの会話ログ
+INSERT INTO public.conversations (
+  conversation_id,
+  character_id,
+  user_input,
+  character_response,
+  user_emotion,
+  timestamp
+)
+VALUES
+  (
+    '20000000-0000-0000-0000-000000000007',
+    '10000000-0000-0000-0000-000000000003',
+    '今日は落ち込んでいるんだ',
+    'そうなんですね...大丈夫ですよ。ゆっくり話を聞かせてください。',
+    '悲しみ',
+    NOW() - INTERVAL '2 hours 30 minutes'
+  ),
+  (
+    '20000000-0000-0000-0000-000000000008',
+    '10000000-0000-0000-0000-000000000003',
+    'いつもありがとう',
+    'こちらこそ、ありがとうございます。いつでもそばにいますからね。',
+    '感謝',
+    NOW() - INTERVAL '1 hour'
+  )
+ON CONFLICT (conversation_id) DO NOTHING;
+
+-- ==========================================
+-- 4. 記憶データ
+-- ==========================================
+
+-- サクラの記憶
+INSERT INTO public.memories (
+  memory_id,
+  character_id,
+  topic,
+  content,
+  created_at,
+  updated_at
+)
+VALUES
+  (
+    '30000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    'ユーザーの好きな食べ物',
+    'ラーメンが大好き。特に豚骨ラーメンがお気に入り。',
+    NOW() - INTERVAL '7 days',
+    NOW() - INTERVAL '7 days'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000001',
+    'ユーザーの趣味',
+    '休日は映画を見るのが好き。アクション映画が特に好み。',
+    NOW() - INTERVAL '5 days',
+    NOW() - INTERVAL '5 days'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000001',
+    'ユーザーの仕事',
+    'IT企業でエンジニアとして働いている。最近プロジェクトリーダーになった。',
+    NOW() - INTERVAL '3 days',
+    NOW() - INTERVAL '3 days'
+  )
+ON CONFLICT (memory_id) DO NOTHING;
+
+-- レイの記憶
+INSERT INTO public.memories (
+  memory_id,
+  character_id,
+  topic,
+  content,
+  created_at,
+  updated_at
+)
+VALUES
+  (
+    '30000000-0000-0000-0000-000000000004',
+    '10000000-0000-0000-0000-000000000002',
+    'ユーザーの目標',
+    '今年中に新しいプログラミング言語を習得したいと考えている。',
+    NOW() - INTERVAL '10 days',
+    NOW() - INTERVAL '10 days'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000005',
+    '10000000-0000-0000-0000-000000000002',
+    'ユーザーの習慣',
+    '毎朝6時に起きて、30分ランニングをしている。健康を意識している。',
+    NOW() - INTERVAL '6 days',
+    NOW() - INTERVAL '6 days'
+  )
+ON CONFLICT (memory_id) DO NOTHING;
+
+-- ユキの記憶
+INSERT INTO public.memories (
+  memory_id,
+  character_id,
+  topic,
+  content,
+  created_at,
+  updated_at
+)
+VALUES
+  (
+    '30000000-0000-0000-0000-000000000006',
+    '10000000-0000-0000-0000-000000000003',
+    'ユーザーの家族',
+    '両親と猫を飼っている。猫の名前はミミ。とても大切にしている。',
+    NOW() - INTERVAL '8 days',
+    NOW() - INTERVAL '8 days'
+  ),
+  (
+    '30000000-0000-0000-0000-000000000007',
+    '10000000-0000-0000-0000-000000000003',
+    'ユーザーの悩み',
+    '最近人間関係で悩んでいる。職場の同僚とのコミュニケーションが難しい。',
+    NOW() - INTERVAL '2 days',
+    NOW() - INTERVAL '2 days'
+  )
+ON CONFLICT (memory_id) DO NOTHING;

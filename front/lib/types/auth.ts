@@ -18,6 +18,10 @@ export type PasswordResetData = {
   email: string;
 };
 
+export type UpdatePasswordData = {
+  password: string;
+};
+
 export type AuthResponse = {
   success: boolean;
   message: string;

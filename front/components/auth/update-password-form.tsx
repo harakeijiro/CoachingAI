@@ -1,18 +1,17 @@
 "use client";
 
 import { useState, FormEvent } from "react";
-import { signUp } from "@/lib/actions/auth";
+import { updatePassword } from "@/lib/actions/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-export default function SignUpForm() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
+export default function UpdatePasswordForm() {
   const [password, setPassword] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const router = useRouter();
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -21,8 +20,8 @@ export default function SignUpForm() {
     setError("");
 
     // クライアント側のバリデーション
-    if (!email || !password || !passwordConfirm) {
-      setError("すべての項目を入力してください");
+    if (!password) {
+      setError("新しいパスワードを入力してください");
       setIsLoading(false);
       return;
     }
@@ -33,28 +32,24 @@ export default function SignUpForm() {
       return;
     }
 
-    if (password !== passwordConfirm) {
+    if (password !== confirmPassword) {
       setError("パスワードが一致しません");
       setIsLoading(false);
       return;
     }
 
     try {
-      // メールアドレスから名前を自動生成（@より前の部分）
-      const name = email.split("@")[0];
-
-      const result = await signUp({
-        email,
-        password,
-        name,
-      });
+      const result = await updatePassword({ password });
 
       if (result.success) {
         setMessage(result.message);
-        // 成功後、対話画面へリダイレクト
+        // フォームをクリア
+        setPassword("");
+        setConfirmPassword("");
+        // 3秒後にログイン画面にリダイレクト
         setTimeout(() => {
-          router.push("/chat");
-        }, 2000);
+          router.push("/signin");
+        }, 3000);
       } else {
         setError(result.message);
       }
@@ -68,32 +63,22 @@ export default function SignUpForm() {
 
   return (
     <div className="w-full max-w-md mx-auto">
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label
-            htmlFor="email"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-          >
-            メールアドレス
-          </label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
-            disabled={isLoading}
-            placeholder="example@email.com"
-          />
-        </div>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          新しいパスワードを設定
+        </h2>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          新しいパスワードを入力してください。
+        </p>
+      </div>
 
+      <form onSubmit={handleSubmit} className="space-y-6">
         <div>
           <label
             htmlFor="password"
             className="block text-sm font-medium text-gray-700 dark:text-gray-300"
           >
-            パスワード
+            新しいパスワード
           </label>
           <input
             id="password"
@@ -106,28 +91,25 @@ export default function SignUpForm() {
             disabled={isLoading}
             placeholder="6文字以上"
           />
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            6文字以上で入力してください
-          </p>
         </div>
 
         <div>
           <label
-            htmlFor="passwordConfirm"
+            htmlFor="confirmPassword"
             className="block text-sm font-medium text-gray-700 dark:text-gray-300"
           >
             パスワード（確認）
           </label>
           <input
-            id="passwordConfirm"
+            id="confirmPassword"
             type="password"
-            value={passwordConfirm}
-            onChange={(e) => setPasswordConfirm(e.target.value)}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
             required
             minLength={6}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
             disabled={isLoading}
-            placeholder="パスワードを再入力"
+            placeholder="もう一度入力してください"
           />
         </div>
 
@@ -142,6 +124,9 @@ export default function SignUpForm() {
             <p className="text-sm text-green-600 dark:text-green-400">
               {message}
             </p>
+            <p className="text-xs text-green-500 dark:text-green-500 mt-1">
+              まもなくログイン画面にリダイレクトします...
+            </p>
           </div>
         )}
 
@@ -150,20 +135,17 @@ export default function SignUpForm() {
           disabled={isLoading}
           className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {isLoading ? "登録中..." : "新規登録"}
+          {isLoading ? "更新中..." : "パスワードを更新"}
         </button>
       </form>
 
       <div className="mt-6 text-center">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          すでにアカウントをお持ちですか？{" "}
-          <Link
-            href="/signin"
-            className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 hover:underline"
-          >
-            ログイン
-          </Link>
-        </p>
+        <Link
+          href="/signin"
+          className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 hover:underline"
+        >
+          ログイン画面に戻る
+        </Link>
       </div>
     </div>
   );
