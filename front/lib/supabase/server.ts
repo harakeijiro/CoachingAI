@@ -1,13 +1,16 @@
-import { createClient } from "@supabase/supabase-js";
+import { createServerClient as createSSRClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 
 /**
  * サーバー専用の Supabase クライアント
- * Server Actions や API Routes でのみ使用
- * 環境変数はクライアントに公開されません
+ * Server Actions や Server Components でのみ使用
+ * Cookieベースの認証管理に対応
  */
-export function createServerClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export async function createServerClient() {
+  const cookieStore = await cookies();
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     throw new Error(
@@ -15,5 +18,21 @@ export function createServerClient() {
     );
   }
 
-  return createClient(supabaseUrl, supabaseAnonKey);
+  return createSSRClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
+        } catch {
+          // Server Componentからの呼び出しでは無視
+          // Middlewareやアクションでは正しく動作する
+        }
+      },
+    },
+  });
 }

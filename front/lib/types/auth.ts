@@ -9,6 +9,15 @@ export type SignUpData = {
   birthdate?: string;
 };
 
+export type SignInData = {
+  email: string;
+  password: string;
+};
+
+export type PasswordResetData = {
+  email: string;
+};
+
 export type AuthResponse = {
   success: boolean;
   message: string;

@@ -10,6 +10,8 @@ export function translateAuthError(error: string): string {
     "Invalid login credentials": "メールアドレスまたはパスワードが正しくありません",
     "Email not confirmed": "メールアドレスが確認されていません",
     "Password should be at least 6 characters": "パスワードは6文字以上である必要があります",
+    "User not found": "ユーザーが見つかりません",
+    "For security purposes, you can only request this once every 60 seconds": "セキュリティのため、60秒に1回のみリクエストできます",
     
     // レート制限
     "Email rate limit exceeded": "メール送信の制限を超えました。しばらく待ってから再度お試しください",
@@ -48,7 +50,7 @@ export function translateAuthError(error: string): string {
 /**
  * データベースエラーメッセージを日本語化
  */
-export function translateDatabaseError(error: any): string {
+export function translateDatabaseError(error: { code?: string; message?: string } | null | undefined): string {
   if (!error) return "データベースエラーが発生しました";
 
   const code = error.code || "";

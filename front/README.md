@@ -29,15 +29,29 @@ cp .env.example .env.local
 `.env.local` を編集：
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+SUPABASE_URL=your-supabase-url
+SUPABASE_ANON_KEY=your-supabase-anon-key
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
+
+**注意**: `NEXT_PUBLIC_APP_URL` はパスワードリセット時のリダイレクト先に使用されます。本番環境では実際のドメインを設定してください。
 
 ### 3. Supabase のセットアップ
 
 1. [Supabase](https://supabase.com/) でプロジェクトを作成
 2. SQL Editor で `supabase/migrations/001_create_users_table.sql` を実行
 3. Project Settings から URL と Anon Key を取得して `.env.local` に設定
+
+#### パスワードリセット機能のための追加設定
+
+パスワードリセット機能を使用するには、Supabase でメール設定を行う必要があります：
+
+1. Supabase ダッシュボードで `Authentication` → `Email Templates` を開く
+2. `Reset Password` テンプレートを確認（デフォルトで有効）
+3. 必要に応じてテンプレートをカスタマイズ
+4. `Authentication` → `URL Configuration` で `Site URL` を設定
+   - 開発環境: `http://localhost:3000`
+   - 本番環境: 実際のドメイン
 
 ### 4. 開発サーバーの起動
 
@@ -51,9 +65,9 @@ yarn dev
 
 ### 認証機能
 
-- ✅ 新規登録（`/signup`）
-- ⏳ ログイン（未実装）
-- ⏳ パスワードリセット（未実装）
+- ✅ 新規登録（`/`）
+- ✅ ログイン（`/signin`）
+- ✅ パスワードリセット（`/reset-password`）
 
 ### その他の機能
 
