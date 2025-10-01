@@ -3,7 +3,7 @@
 import { Suspense, useRef, useEffect, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Environment } from "@react-three/drei";
-import { Model as Dog } from "@/components/Dog";
+import { Model as Dog } from "@/components/chat/Dog";
 
 type Message = {
   id: string;
