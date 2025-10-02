@@ -28,6 +28,10 @@ export default function ChatPage() {
   const voicesRef = useRef<SpeechSynthesisVoice[] | null>(null);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
 
+  // 音声キュー（複数文の順次再生用）
+  const audioQueueRef = useRef<string[]>([]);
+  const isPlayingQueueRef = useRef(false);
+
   // キャラクターは音声を出している時だけ口を動かす
   const isTalking = isSpeaking;
 
@@ -123,6 +127,10 @@ export default function ChatPage() {
 
   // TTS 制御
   const cancelSpeaking = () => {
+    // キューをクリア
+    audioQueueRef.current = [];
+    isPlayingQueueRef.current = false;
+
     try {
       audioEl?.pause();
     } catch {}
@@ -135,13 +143,14 @@ export default function ChatPage() {
     setIsSpeaking(false);
   };
 
-  const speak = async (text: string) => {
-    if (!text) return;
+  // 音声キューの次の項目を再生
+  const playNextInQueue = async () => {
+    if (isPlayingQueueRef.current || audioQueueRef.current.length === 0) {
+      return;
+    }
 
-    // 既存再生を一旦停止
-    try {
-      audioEl?.pause();
-    } catch {}
+    isPlayingQueueRef.current = true;
+    const text = audioQueueRef.current.shift()!;
 
     try {
       // Cartesia TTS API を呼び出し
@@ -163,10 +172,16 @@ export default function ChatPage() {
       a.onended = () => {
         setIsSpeaking(false);
         URL.revokeObjectURL(url);
+        isPlayingQueueRef.current = false;
+        // 次の音声を再生
+        playNextInQueue();
       };
       a.onerror = () => {
         setIsSpeaking(false);
         URL.revokeObjectURL(url);
+        isPlayingQueueRef.current = false;
+        // エラーでも次の音声を再生
+        playNextInQueue();
       };
       await a.play();
     } catch (e) {
@@ -175,9 +190,6 @@ export default function ChatPage() {
       try {
         if (typeof window !== "undefined" && "speechSynthesis" in window) {
           const synth = window.speechSynthesis;
-          try {
-            synth.cancel();
-          } catch {}
 
           const utt = new SpeechSynthesisUtterance(text);
           utt.lang = "ja-JP";
@@ -214,15 +226,32 @@ export default function ChatPage() {
           }
 
           utt.onstart = () => setIsSpeaking(true);
-          utt.onend = () => setIsSpeaking(false);
-          utt.onerror = () => setIsSpeaking(false);
+          utt.onend = () => {
+            setIsSpeaking(false);
+            isPlayingQueueRef.current = false;
+            playNextInQueue();
+          };
+          utt.onerror = () => {
+            setIsSpeaking(false);
+            isPlayingQueueRef.current = false;
+            playNextInQueue();
+          };
           utteranceRef.current = utt;
           synth.speak(utt);
           return;
         }
       } catch {}
       setIsSpeaking(false);
+      isPlayingQueueRef.current = false;
+      playNextInQueue();
     }
+  };
+
+  const speak = (text: string) => {
+    if (!text) return;
+    // キューに追加して再生開始
+    audioQueueRef.current.push(text);
+    playNextInQueue();
   };
 
   // 録音制御
@@ -309,6 +338,44 @@ export default function ChatPage() {
       // 表示はしないが、会話コンテキストとして保持
       setMessages((prev) => [...prev, assistantMessage]);
 
+      // バッファリング用の変数とタイマー
+      let updateScheduled = false;
+      const scheduleUpdate = () => {
+        if (!updateScheduled) {
+          updateScheduled = true;
+          requestAnimationFrame(() => {
+            setMessages((prev) => {
+              const newMessages = [...prev];
+              newMessages[newMessages.length - 1] = { ...assistantMessage };
+              return newMessages;
+            });
+            updateScheduled = false;
+          });
+        }
+      };
+
+      // TTS先行開始用の変数
+      let lastSpokenIndex = 0; // 最後に読み上げた位置
+      const sentenceEndPattern = /[。！？\n]/; // 文末判定パターン
+
+      const checkAndSpeak = () => {
+        if (!supportsTTS) return;
+
+        const content = assistantMessage.content;
+        // 最後に読み上げた位置以降で文末を探す
+        for (let i = lastSpokenIndex; i < content.length; i++) {
+          if (sentenceEndPattern.test(content[i])) {
+            // 文末が見つかった場合、その部分までを読み上げ
+            const textToSpeak = content.slice(lastSpokenIndex, i + 1).trim();
+            if (textToSpeak) {
+              speak(textToSpeak);
+              lastSpokenIndex = i + 1;
+            }
+            break; // 1文ずつ処理
+          }
+        }
+      };
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -323,11 +390,10 @@ export default function ChatPage() {
               const data = JSON.parse(jsonStr);
               if (data && typeof data === "string") {
                 assistantMessage.content += data;
-                setMessages((prev) => {
-                  const newMessages = [...prev];
-                  newMessages[newMessages.length - 1] = { ...assistantMessage };
-                  return newMessages;
-                });
+                // 即時更新ではなく、次のフレームでまとめて更新
+                scheduleUpdate();
+                // 文末が来たら即座にTTS開始
+                checkAndSpeak();
               }
             } catch (e) {
               // JSON parse error, skip
@@ -336,9 +402,21 @@ export default function ChatPage() {
         }
       }
 
-      // ストリーミング完了後に読み上げ
-      if (supportsTTS && assistantMessage.content) {
-        speak(assistantMessage.content);
+      // ストリーミング完了後に最終更新を確実に反映
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        newMessages[newMessages.length - 1] = { ...assistantMessage };
+        return newMessages;
+      });
+
+      // 残りのテキストがあれば最後に読み上げ
+      if (supportsTTS && lastSpokenIndex < assistantMessage.content.length) {
+        const remainingText = assistantMessage.content
+          .slice(lastSpokenIndex)
+          .trim();
+        if (remainingText) {
+          speak(remainingText);
+        }
       }
     } catch (error) {
       console.error("Error:", error);

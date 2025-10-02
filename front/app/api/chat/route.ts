@@ -19,9 +19,9 @@ export async function POST(req: Request) {
     // 環境変数からモデル名を取得（デフォルトはgemini-2.5-flash）
     const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
-    // Google Generative AI REST APIを直接呼び出し
+    // Gemini Streaming APIを呼び出し（streamGenerateContent）
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`,
       {
         method: "POST",
         headers: {
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
             {
               parts: [
                 {
-                  text: `あなたは親切で優しいAIアシスタントです。日本語で自然な会話をしてください。あまり長くない返信にしてください。
+                  text: `あなたは「みずき」です。端的な返信にしてください。
 
 ユーザー: ${lastUserMessage}`,
                 },
@@ -44,28 +44,57 @@ export async function POST(req: Request) {
     );
 
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Gemini API Error:", errorData);
+      const errorText = await response.text();
+      console.error("Gemini API Error:", errorText);
       throw new Error(`API Error: ${response.status}`);
     }
 
-    const data = await response.json();
-    const aiResponse =
-      data.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "申し訳ありません。応答を生成できませんでした。";
-
-    // ストリーミング形式で返す
+    // Geminiからのストリーミングレスポンスをクライアントへ即座に中継
     const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+
     const stream = new ReadableStream({
       async start(controller) {
-        // 文字を一つずつストリーミング
-        for (let i = 0; i < aiResponse.length; i++) {
-          const char = aiResponse[i];
-          const data = `0:"${char}"\n`;
-          controller.enqueue(encoder.encode(data));
-          await new Promise((resolve) => setTimeout(resolve, 30));
+        const reader = response.body?.getReader();
+        if (!reader) {
+          controller.close();
+          return;
         }
-        controller.close();
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            // SSE形式のレスポンスをパース
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split("\n");
+
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                try {
+                  const jsonStr = line.slice(6); // "data: " を除去
+                  const data = JSON.parse(jsonStr);
+                  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                  if (text) {
+                    // 受信したテキストを1文字ずつクライアントへ送信
+                    for (const char of text) {
+                      const payload = `0:"${char}"\n`;
+                      controller.enqueue(encoder.encode(payload));
+                    }
+                  }
+                } catch (e) {
+                  // JSONパースエラーは無視（不完全なチャンクの可能性）
+                }
+              }
+            }
+          }
+          controller.close();
+        } catch (error) {
+          console.error("Stream reading error:", error);
+          controller.error(error);
+        }
       },
     });
 
