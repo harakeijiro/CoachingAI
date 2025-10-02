@@ -32,7 +32,9 @@ export async function POST(req: Request) {
             {
               parts: [
                 {
-                  text: `あなたは親切で優しい犬のAIアシスタントです。日本語で自然な会話をしてください。時々「ワンワン！」と言って犬らしさを出してください。\n\nユーザー: ${lastUserMessage}`,
+                  text: `あなたは親切で優しいAIアシスタントです。日本語で自然な会話をしてください。あまり長くない返信にしてください。
+
+ユーザー: ${lastUserMessage}`,
                 },
               ],
             },

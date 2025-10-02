@@ -26,6 +26,7 @@ export default function ChatPage() {
   const [supportsTTS, setSupportsTTS] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const voicesRef = useRef<SpeechSynthesisVoice[] | null>(null);
+  const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
 
   // キャラクターは音声を出している時だけ口を動かす
   const isTalking = isSpeaking;
@@ -122,64 +123,106 @@ export default function ChatPage() {
 
   // TTS 制御
   const cancelSpeaking = () => {
-    if (typeof window === "undefined") return;
     try {
-      window.speechSynthesis.cancel();
+      audioEl?.pause();
+    } catch {}
+    try {
+      // 既存の Web Speech 再生が残っていたら停止
+      if (typeof window !== "undefined") {
+        window.speechSynthesis?.cancel?.();
+      }
     } catch {}
     setIsSpeaking(false);
   };
 
-  const speak = (text: string) => {
-    if (!supportsTTS || !text) return;
-    if (typeof window === "undefined") return;
-    const synth = window.speechSynthesis;
+  const speak = async (text: string) => {
+    if (!text) return;
+
+    // 既存再生を一旦停止
     try {
-      synth.cancel();
+      audioEl?.pause();
     } catch {}
 
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.lang = "ja-JP";
-
-    const vs = voicesRef.current;
-    if (vs && vs.length) {
-      // 男性の日本語ボイスを優先順位で選択
-      const preferMale = [
-        "Otoya", // macOS 男性
-        "Hattori", // macOS 男性
-        "Google 日本語", // Chrome
-        "Microsoft Ichiro", // Windows 男性
-        "Kenji", // その他
-      ];
-
-      const jaVoices = vs.filter(
-        (v) => /ja/i.test(v.lang || "") || /日本語|Japanese/i.test(v.name || "")
-      );
-
-      // 男性ボイスの優先度でソート
-      jaVoices.sort((a, b) => {
-        const ai = preferMale.findIndex((p) => (a.name || "").includes(p));
-        const bi = preferMale.findIndex((p) => (b.name || "").includes(p));
-        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    try {
+      // Cartesia TTS API を呼び出し
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
       });
+      if (!res.ok) throw new Error(`TTS ${res.status}`);
 
-      if (jaVoices[0]) {
-        utt.voice = jaVoices[0];
-        console.log(
-          `🎤 選択されたボイス: ${jaVoices[0].name} (${jaVoices[0].lang})`
-        );
-      }
+      const buf = await res.arrayBuffer();
+      const blob = new Blob([buf], { type: "audio/wav" });
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      setAudioEl(a);
+      a.onplay = () => {
+        setIsSpeaking(true);
+      };
+      a.onended = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(url);
+      };
+      a.onerror = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(url);
+      };
+      await a.play();
+    } catch (e) {
+      console.error("Cartesia TTS error, fallback to Web Speech API:", e);
+      // フォールバック: ブラウザの Web Speech API
+      try {
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          const synth = window.speechSynthesis;
+          try {
+            synth.cancel();
+          } catch {}
+
+          const utt = new SpeechSynthesisUtterance(text);
+          utt.lang = "ja-JP";
+          utt.rate = 0.95;
+          utt.pitch = 0.85;
+          utt.volume = 1.0;
+
+          const vs = voicesRef.current;
+          if (vs && vs.length) {
+            const preferMale = [
+              "Otoya",
+              "Hattori",
+              "Google 日本語",
+              "Microsoft Ichiro",
+              "Kenji",
+            ];
+            const jaVoices = vs.filter(
+              (v) =>
+                /ja/i.test(v.lang || "") ||
+                /日本語|Japanese/i.test(v.name || "")
+            );
+            jaVoices.sort((a, b) => {
+              const ai = preferMale.findIndex((p) =>
+                (a.name || "").includes(p)
+              );
+              const bi = preferMale.findIndex((p) =>
+                (b.name || "").includes(p)
+              );
+              return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+            });
+            if (jaVoices[0]) {
+              utt.voice = jaVoices[0];
+            }
+          }
+
+          utt.onstart = () => setIsSpeaking(true);
+          utt.onend = () => setIsSpeaking(false);
+          utt.onerror = () => setIsSpeaking(false);
+          utteranceRef.current = utt;
+          synth.speak(utt);
+          return;
+        }
+      } catch {}
+      setIsSpeaking(false);
     }
-
-    // 男性らしい低めの声にする
-    utt.rate = 0.95;
-    utt.pitch = 0.85; // 低めに設定
-    utt.volume = 1.0;
-
-    utt.onstart = () => setIsSpeaking(true);
-    utt.onend = () => setIsSpeaking(false);
-    utt.onerror = () => setIsSpeaking(false);
-    utteranceRef.current = utt;
-    synth.speak(utt);
   };
 
   // 録音制御
