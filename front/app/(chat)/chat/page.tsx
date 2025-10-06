@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef, useEffect, useState } from "react";
+import { Suspense, useRef, useEffect, useState, useCallback } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Environment } from "@react-three/drei";
 import { Model as Dog } from "@/components/chat/Dog";
@@ -15,6 +15,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [hasInitialMessage, setHasInitialMessage] = useState(false);
 
   // 音声入力関連
   const recognitionRef = useRef<any>(null);
@@ -34,6 +35,20 @@ export default function ChatPage() {
 
   // キャラクターは音声を出している時だけ口を動かす
   const isTalking = isSpeaking;
+
+  // 初期メッセージの候補
+  const initialMessages = [
+    "こんにちは！みずきです。今日は何をお話ししましょうか？",
+    "やあ！みずきだよ。元気？何か楽しい話でもしようか！",
+    "おはよう！みずきです。今日も一緒に過ごそうね。",
+    "こんにちは！みずきだよ。何かお手伝いできることはある？",
+    "やあ！みずきです。今日はどんな一日だった？",
+    "こんにちは！みずきだよ。一緒に楽しい時間を過ごそう！",
+    "おはよう！みずきです。何か話したいことはある？",
+    "やあ！みずきだよ。今日もよろしくお願いします！",
+    "こんにちは！みずきです。何かお困りのことはない？",
+    "やあ！みずきだよ。一緒に何か楽しいことをしよう！",
+  ];
 
   // Web Speech API 初期化
   useEffect(() => {
@@ -247,12 +262,32 @@ export default function ChatPage() {
     }
   };
 
-  const speak = (text: string) => {
+  const speak = useCallback((text: string) => {
     if (!text) return;
     // キューに追加して再生開始
     audioQueueRef.current.push(text);
     playNextInQueue();
-  };
+  }, []);
+
+  // 初期メッセージの表示と音声再生
+  useEffect(() => {
+    if (!hasInitialMessage && supportsTTS) {
+      const randomMessage =
+        initialMessages[Math.floor(Math.random() * initialMessages.length)];
+      const initialMessage: Message = {
+        id: "initial",
+        role: "assistant",
+        content: randomMessage,
+      };
+      setMessages([initialMessage]);
+      setHasInitialMessage(true);
+
+      // 初期メッセージを音声で再生
+      setTimeout(() => {
+        speak(initialMessage.content);
+      }, 500);
+    }
+  }, [supportsTTS, hasInitialMessage, speak, initialMessages]);
 
   // 録音制御
   const startRecording = () => {
