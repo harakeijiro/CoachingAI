@@ -16,6 +16,13 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // ====== フォーム自動送信用 追加 ======
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const isComposingRef = useRef(false); // 日本語IME変換中ガード
+  const autoSubmitTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const AUTO_DEBOUNCE_MS = 400; // ← デバウンス
+  const MIN_AUTO_CHARS = 4; // ← 最小文字数
+
   // 音声入力関連
   const recognitionRef = useRef<any>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -25,14 +32,10 @@ export default function ChatPage() {
   const lastSpeechTimeRef = useRef<number>(0);
   const isManualInputRef = useRef<boolean>(false);
 
-  // 追加：発話テキストの整形・重複ガード・キュー
+  // 追加：発話テキストの整形・重複ガード・（音声経路でも利用）
   const normalize = (t: string) => t.replace(/\s+/g, " ").trim();
   const lastSentRef = useRef<string>("");
-  const isProcessingRef = useRef(false); // 送信中フラグ
-  const autoSendQRef = useRef<string[]>([]);
   const isSpeakingRef = useRef(false); // setIsSpeakingに同期
-  const COOLDOWN_MS = 250;
-
   const shouldSend = (t: string) => {
     const text = normalize(t);
     if (text.length < 5) return false; // ノイズ防止
@@ -41,26 +44,14 @@ export default function ChatPage() {
     return true;
   };
 
-  const tickAutoSend = async () => {
-    if (isProcessingRef.current) return;
-    const next = autoSendQRef.current.shift();
-    if (!next) return;
-    isProcessingRef.current = true;
-    try {
-      await handleAutoSubmit(next); // 既存の送信関数を再利用
-      await new Promise((r) => setTimeout(r, COOLDOWN_MS));
-    } finally {
-      isProcessingRef.current = false;
-      if (autoSendQRef.current.length) tickAutoSend();
-    }
-  };
+  // ====== 音量監視（割り込み用：あなたの既存ロジック） ======
+  const [isMonitoringVolume, setIsMonitoringVolume] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const microphoneRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const volumeCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const volumeThreshold = 0.01;
 
-  const enqueueAutoSend = (text: string) => {
-    autoSendQRef.current.push(normalize(text));
-    tickAutoSend();
-  };
-
-  // 音量監視開始
   const startVolumeMonitoring = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -78,23 +69,18 @@ export default function ChatPage() {
 
       setIsMonitoringVolume(true);
 
-      // 音量チェックの間隔（50ms）
       volumeCheckIntervalRef.current = setInterval(() => {
         if (isSpeaking && analyser) {
           const dataArray = new Uint8Array(analyser.frequencyBinCount);
           analyser.getByteFrequencyData(dataArray);
-
-          // RMS計算
           let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) {
+          for (let i = 0; i < dataArray.length; i++)
             sum += dataArray[i] * dataArray[i];
-          }
           const rms = Math.sqrt(sum / dataArray.length) / 255;
 
           if (rms > volumeThreshold) {
             console.log("ユーザーが話し始めました、TTSをキャンセル:", rms);
             cancelSpeaking();
-            // 音声認識を即座に再開
             if (isContinuousListening && !isManualInputRef.current) {
               setTimeout(() => {
                 try {
@@ -116,21 +102,17 @@ export default function ChatPage() {
     }
   };
 
-  // 音量監視停止
   const stopVolumeMonitoring = () => {
     if (volumeCheckIntervalRef.current) {
       clearInterval(volumeCheckIntervalRef.current);
       volumeCheckIntervalRef.current = null;
     }
-
-    if (microphoneRef.current) {
-      microphoneRef.current.disconnect();
-    }
-
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-    }
-
+    try {
+      microphoneRef.current?.disconnect();
+    } catch {}
+    try {
+      audioContextRef.current?.close();
+    } catch {}
     setIsMonitoringVolume(false);
   };
 
@@ -141,19 +123,11 @@ export default function ChatPage() {
   const voicesRef = useRef<SpeechSynthesisVoice[] | null>(null);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
 
-  // 音声キュー（複数文の順次再生用）
+  // 音声キュー
   const audioQueueRef = useRef<string[]>([]);
   const isPlayingQueueRef = useRef(false);
 
-  // 音量監視関連
-  const [isMonitoringVolume, setIsMonitoringVolume] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const microphoneRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const volumeCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const volumeThreshold = 0.01; // 音量の閾値（調整可能）
-
-  // キャラクターは音声を出している時だけ口を動かす
+  // 3Dの口パク
   const isTalking = isSpeaking;
 
   // isSpeakingRefをsetIsSpeakingと同期
@@ -161,7 +135,7 @@ export default function ChatPage() {
     isSpeakingRef.current = isSpeaking;
   }, [isSpeaking]);
 
-  // Web Speech API 初期化
+  // ====== Web Speech API 初期化（あなたの既存） ======
   useEffect(() => {
     const SR =
       (typeof window !== "undefined" &&
@@ -185,7 +159,13 @@ export default function ChatPage() {
           else interim += transcript;
         }
 
-        // 手動入力中でない場合のみ音声入力を処理
+        console.log("音声認識結果:", {
+          interim,
+          finalText,
+          isContinuousListening,
+          isManualInput: isManualInputRef.current,
+        });
+
         if (!isManualInputRef.current) {
           setInput((prev) => {
             const base = prev.replace(/（話し中….*）$/u, "");
@@ -194,39 +174,21 @@ export default function ChatPage() {
               : base + (interim ? `（話し中…${interim}）` : "");
           });
 
-          // 音声が検出された場合、無音タイムアウトをリセット
-          if (interim || finalText) {
-            lastSpeechTimeRef.current = Date.now();
-            if (silenceTimeoutRef.current) {
-              clearTimeout(silenceTimeoutRef.current);
-            }
-          }
-
-          // finalTextが確定した場合は即座に送信
+          // finalは音声経路の即送信（既存方針）
           if (finalText && isContinuousListening) {
             const cleanText = finalText.trim();
+            console.log(
+              "finalText検出:",
+              cleanText,
+              "shouldSend結果:",
+              shouldSend(cleanText)
+            );
             if (cleanText && shouldSend(cleanText)) {
-              console.log("音声認識完了、自動送信:", cleanText);
               setInput("");
-              enqueueAutoSend(cleanText);
+              setTimeout(() => {
+                handleAutoSubmit(cleanText);
+              }, 0);
             }
-          } else if (interim) {
-            // interimの場合は無音タイムアウトを設定（1.5秒）
-            silenceTimeoutRef.current = setTimeout(() => {
-              if (isContinuousListening && !isManualInputRef.current) {
-                setInput((currentInput) => {
-                  const cleanInput = currentInput
-                    .replace(/（話し中….*）$/u, "")
-                    .trim();
-                  if (cleanInput && shouldSend(cleanInput)) {
-                    console.log("無音タイムアウト、自動送信:", cleanInput);
-                    setInput("");
-                    enqueueAutoSend(cleanInput);
-                  }
-                  return currentInput;
-                });
-              }
-            }, 1500);
           }
         }
       };
@@ -234,8 +196,6 @@ export default function ChatPage() {
       recognition.onend = () => {
         setIsRecording(false);
         setInput((prev) => prev.replace(/（話し中….*）$/u, ""));
-
-        // 常時リッスン中なら自動再開
         if (isContinuousListening && !isManualInputRef.current) {
           setTimeout(() => {
             try {
@@ -252,7 +212,13 @@ export default function ChatPage() {
         console.log("Recognition error:", event.error);
         setIsRecording(false);
 
-        // エラーが発生しても常時リッスン中なら再開を試行
+        // NotAllowedErrorの場合はユーザーに再試行を促す
+        if (event.error === "not-allowed") {
+          console.log("マイクの許可が必要です");
+          setHasUserInteracted(false); // 再インタラクションを促す
+          return;
+        }
+
         if (
           isContinuousListening &&
           !isManualInputRef.current &&
@@ -276,29 +242,67 @@ export default function ChatPage() {
       try {
         recognitionRef.current?.stop();
       } catch {}
-      if (silenceTimeoutRef.current) {
-        clearTimeout(silenceTimeoutRef.current);
-      }
-      stopVolumeMonitoring(); // 音量監視のクリーンアップ
+      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+      stopVolumeMonitoring();
     };
   }, []);
 
-  // 常時リッスン開始
+  // ユーザーインタラクション検知用
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+
+  // ユーザーインタラクション検知
   useEffect(() => {
-    if (supportsSpeech && recognitionRef.current && !isContinuousListening) {
+    const handleUserInteraction = () => {
+      setHasUserInteracted(true);
+      // 一度検知したらイベントリスナーを削除
+      document.removeEventListener("click", handleUserInteraction);
+      document.removeEventListener("keydown", handleUserInteraction);
+      document.removeEventListener("touchstart", handleUserInteraction);
+    };
+
+    document.addEventListener("click", handleUserInteraction);
+    document.addEventListener("keydown", handleUserInteraction);
+    document.addEventListener("touchstart", handleUserInteraction);
+
+    return () => {
+      document.removeEventListener("click", handleUserInteraction);
+      document.removeEventListener("keydown", handleUserInteraction);
+      document.removeEventListener("touchstart", handleUserInteraction);
+    };
+  }, []);
+
+  // 常時リッスン開始（ユーザーインタラクション後）
+  useEffect(() => {
+    if (
+      supportsSpeech &&
+      recognitionRef.current &&
+      !isContinuousListening &&
+      hasUserInteracted
+    ) {
       setIsContinuousListening(true);
-      setTimeout(() => {
+
+      // マイクの許可を求めてから音声認識を開始
+      const startRecognition = async () => {
         try {
+          // マイクの許可を求める
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+          console.log("マイクの許可が得られました");
+
+          // 音声認識を開始
           recognitionRef.current?.start();
           setIsRecording(true);
+          console.log("音声認識を開始しました");
         } catch (e) {
-          console.log("Initial recognition start failed:", e);
+          console.log("マイクの許可が拒否されました:", e);
+          setHasUserInteracted(false); // 再インタラクションを促す
         }
-      }, 500);
-    }
-  }, [supportsSpeech, isContinuousListening]);
+      };
 
-  // TTS 初期化
+      setTimeout(startRecognition, 500);
+    }
+  }, [supportsSpeech, isContinuousListening, hasUserInteracted]);
+
+  // ====== TTS 初期化（あなたの既存） ======
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hasTTS =
@@ -311,7 +315,6 @@ export default function ChatPage() {
       const v = synth.getVoices();
       if (v && v.length) {
         voicesRef.current = v;
-        // 利用可能な日本語ボイスをログ出力（初回のみ）
         const jaVoices = v.filter(
           (voice) =>
             /ja/i.test(voice.lang || "") ||
@@ -319,9 +322,9 @@ export default function ChatPage() {
         );
         if (jaVoices.length > 0) {
           console.log("📢 利用可能な日本語ボイス:");
-          jaVoices.forEach((voice) => {
-            console.log(`  - ${voice.name} (${voice.lang})`);
-          });
+          jaVoices.forEach((voice) =>
+            console.log(`  - ${voice.name} (${voice.lang})`)
+          );
         }
       }
     };
@@ -330,7 +333,7 @@ export default function ChatPage() {
 
     return () => {
       try {
-        synth.onvoiceschanged = null as any;
+        (synth as any).onvoiceschanged = null;
       } catch {}
       try {
         synth.cancel();
@@ -338,42 +341,31 @@ export default function ChatPage() {
     };
   }, []);
 
-  // TTS 制御
+  // ====== TTS 制御（あなたの既存＋フック） ======
   const cancelSpeaking = () => {
-    // キューをクリア
     audioQueueRef.current = [];
     isPlayingQueueRef.current = false;
-
     try {
       audioEl?.pause();
     } catch {}
     try {
-      // 既存の Web Speech 再生が残っていたら停止
-      if (typeof window !== "undefined") {
-        window.speechSynthesis?.cancel?.();
-      }
+      window?.speechSynthesis?.cancel?.();
     } catch {}
     setIsSpeaking(false);
   };
 
-  // 音声キューの次の項目を再生
   const playNextInQueue = async () => {
-    if (isPlayingQueueRef.current || audioQueueRef.current.length === 0) {
-      return;
-    }
-
+    if (isPlayingQueueRef.current || audioQueueRef.current.length === 0) return;
     isPlayingQueueRef.current = true;
     const text = audioQueueRef.current.shift()!;
 
     try {
-      // Cartesia TTS API を呼び出し
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
       if (!res.ok) throw new Error(`TTS ${res.status}`);
-
       const buf = await res.arrayBuffer();
       const blob = new Blob([buf], { type: "audio/wav" });
       const url = URL.createObjectURL(blob);
@@ -386,36 +378,31 @@ export default function ChatPage() {
           recognitionRef.current?.stop();
         } catch {}
         setIsRecording(false);
-        startVolumeMonitoring(); // 音量監視開始
+        startVolumeMonitoring();
       };
       a.onended = () => {
         URL.revokeObjectURL(url);
         isPlayingQueueRef.current = false;
-        onTtsEnded(); // 統一された終了ハンドラー
-        // 次の音声を再生
+        onTtsEnded();
         playNextInQueue();
       };
       a.onerror = () => {
         URL.revokeObjectURL(url);
         isPlayingQueueRef.current = false;
-        onTtsEnded(); // 統一された終了ハンドラー
-        // エラーでも次の音声を再生
+        onTtsEnded();
         playNextInQueue();
       };
       await a.play();
     } catch (e) {
       console.error("Cartesia TTS error, fallback to Web Speech API:", e);
-      // フォールバック: ブラウザの Web Speech API
       try {
         if (typeof window !== "undefined" && "speechSynthesis" in window) {
           const synth = window.speechSynthesis;
-
           const utt = new SpeechSynthesisUtterance(text);
           utt.lang = "ja-JP";
           utt.rate = 0.95;
           utt.pitch = 0.85;
           utt.volume = 1.0;
-
           const vs = voicesRef.current;
           if (vs && vs.length) {
             const preferMale = [
@@ -439,11 +426,8 @@ export default function ChatPage() {
               );
               return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
             });
-            if (jaVoices[0]) {
-              utt.voice = jaVoices[0];
-            }
+            if (jaVoices[0]) utt.voice = jaVoices[0];
           }
-
           utt.onstart = () => {
             setIsSpeaking(true);
             isSpeakingRef.current = true;
@@ -451,16 +435,16 @@ export default function ChatPage() {
               recognitionRef.current?.stop();
             } catch {}
             setIsRecording(false);
-            startVolumeMonitoring(); // 音量監視開始
+            startVolumeMonitoring();
           };
           utt.onend = () => {
             isPlayingQueueRef.current = false;
-            onTtsEnded(); // 統一された終了ハンドラー
+            onTtsEnded();
             playNextInQueue();
           };
           utt.onerror = () => {
             isPlayingQueueRef.current = false;
-            onTtsEnded(); // 統一された終了ハンドラー
+            onTtsEnded();
             playNextInQueue();
           };
           utteranceRef.current = utt;
@@ -476,18 +460,14 @@ export default function ChatPage() {
 
   const speak = (text: string) => {
     if (!text) return;
-    // キューに追加して再生開始
     audioQueueRef.current.push(text);
     playNextInQueue();
   };
 
-  // TTS終了時の統一された終了ハンドラー
   const onTtsEnded = () => {
     setIsSpeaking(false);
     isSpeakingRef.current = false;
-    stopVolumeMonitoring(); // 音量監視停止
-
-    // 少し待ってから再開（ブラウザのイベント衝突を避ける）
+    stopVolumeMonitoring();
     if (isContinuousListening && !isManualInputRef.current) {
       setTimeout(() => {
         try {
@@ -498,17 +478,13 @@ export default function ChatPage() {
     }
   };
 
-  // 自動送信処理
+  // ====== 自動送信処理（既存） ======
   const handleAutoSubmit = async (text: string) => {
     if (!text.trim() || isLoading) return;
-
-    // 音声認識を一時停止
     try {
       recognitionRef.current?.stop();
     } catch {}
     setIsRecording(false);
-
-    // 読み上げ中なら停止
     cancelSpeaking();
 
     const userMessage: Message = {
@@ -516,7 +492,6 @@ export default function ChatPage() {
       role: "user",
       content: text,
     };
-
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
@@ -543,7 +518,6 @@ export default function ChatPage() {
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-
       if (!reader) throw new Error("No reader");
 
       let assistantMessage: Message = {
@@ -551,10 +525,8 @@ export default function ChatPage() {
         role: "assistant",
         content: "",
       };
-
       setMessages((prev) => [...prev, assistantMessage]);
 
-      // バッファリング用の変数とタイマー
       let updateScheduled = false;
       const scheduleUpdate = () => {
         if (!updateScheduled) {
@@ -570,13 +542,10 @@ export default function ChatPage() {
         }
       };
 
-      // TTS先行開始用の変数
       let lastSpokenIndex = 0;
       const sentenceEndPattern = /[。！？\n]/;
-
       const checkAndSpeak = () => {
         if (!supportsTTS) return;
-
         const content = assistantMessage.content;
         for (let i = lastSpokenIndex; i < content.length; i++) {
           if (sentenceEndPattern.test(content[i])) {
@@ -593,10 +562,8 @@ export default function ChatPage() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         const chunk = decoder.decode(value);
         const lines = chunk.split("\n");
-
         for (const line of lines) {
           if (line.startsWith("0:")) {
             try {
@@ -607,9 +574,7 @@ export default function ChatPage() {
                 scheduleUpdate();
                 checkAndSpeak();
               }
-            } catch (e) {
-              // JSON parse error, skip
-            }
+            } catch {}
           }
         }
       }
@@ -619,14 +584,11 @@ export default function ChatPage() {
         newMessages[newMessages.length - 1] = { ...assistantMessage };
         return newMessages;
       });
-
       if (supportsTTS && lastSpokenIndex < assistantMessage.content.length) {
         const remainingText = assistantMessage.content
           .slice(lastSpokenIndex)
           .trim();
-        if (remainingText) {
-          speak(remainingText);
-        }
+        if (remainingText) speak(remainingText);
       }
     } catch (error) {
       console.error("Error:", error);
@@ -640,8 +602,6 @@ export default function ChatPage() {
       ]);
     } finally {
       setIsLoading(false);
-
-      // 応答完了後に音声認識を再開
       if (isContinuousListening && !isManualInputRef.current) {
         setTimeout(() => {
           try {
@@ -655,19 +615,16 @@ export default function ChatPage() {
     }
   };
 
-  // 手動入力時の制御
+  // ====== 手動入力時の制御（既存＋IMEフラグ） ======
   const handleInputFocus = () => {
     isManualInputRef.current = true;
-    // 音声認識を一時停止
     try {
       recognitionRef.current?.stop();
     } catch {}
     setIsRecording(false);
   };
-
   const handleInputBlur = () => {
     isManualInputRef.current = false;
-    // 手動入力が空なら音声認識を再開
     if (!input.trim() && isContinuousListening) {
       setTimeout(() => {
         try {
@@ -680,25 +637,46 @@ export default function ChatPage() {
     }
   };
 
-  // メッセージ送信処理
+  // ====== ★ここが「文字が入ったら自動で送信ボタンを押す」実装 ======
+  useEffect(() => {
+    // 入力更新のたびにデバウンス
+    if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
+
+    // 空なら何もしない
+    if (!input) return;
+
+    autoSubmitTimerRef.current = setTimeout(() => {
+      // ガード条件：送信してよい状態か
+      if (isLoading) return; // 送信中は不可
+      if (isComposingRef.current) return; // 日本語変換中は不可
+      if (/（話し中….*）$/u.test(input)) return; // 暫定表示は不可
+      const clean = normalize(input);
+      if (clean.length < MIN_AUTO_CHARS) return; // 短すぎる
+      if (!shouldSend(clean)) return; // 直前と同一など
+
+      // 実際に「送信ボタンを押す」のと同じ動作
+      formRef.current?.requestSubmit();
+    }, AUTO_DEBOUNCE_MS);
+
+    return () => {
+      if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
+    };
+  }, [input, isLoading]);
+
+  // ====== メッセージ送信（手動ボタン/自動requestSubmit 共通） ======
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    // 録音中なら送信前に停止
     if (isRecording) {
       try {
         recognitionRef.current?.stop();
       } catch {}
       setIsRecording(false);
     }
-
-    // 読み上げ中なら停止
     cancelSpeaking();
 
-    // 暫定表示を削除
     const finalInput = input.replace(/（話し中….*）$/u, "");
-
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
@@ -731,7 +709,6 @@ export default function ChatPage() {
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-
       if (!reader) throw new Error("No reader");
 
       let assistantMessage: Message = {
@@ -739,11 +716,8 @@ export default function ChatPage() {
         role: "assistant",
         content: "",
       };
-
-      // 表示はしないが、会話コンテキストとして保持
       setMessages((prev) => [...prev, assistantMessage]);
 
-      // バッファリング用の変数とタイマー
       let updateScheduled = false;
       const scheduleUpdate = () => {
         if (!updateScheduled) {
@@ -759,24 +733,19 @@ export default function ChatPage() {
         }
       };
 
-      // TTS先行開始用の変数
-      let lastSpokenIndex = 0; // 最後に読み上げた位置
-      const sentenceEndPattern = /[。！？\n]/; // 文末判定パターン
-
+      let lastSpokenIndex = 0;
+      const sentenceEndPattern = /[。！？\n]/;
       const checkAndSpeak = () => {
         if (!supportsTTS) return;
-
         const content = assistantMessage.content;
-        // 最後に読み上げた位置以降で文末を探す
         for (let i = lastSpokenIndex; i < content.length; i++) {
           if (sentenceEndPattern.test(content[i])) {
-            // 文末が見つかった場合、その部分までを読み上げ
             const textToSpeak = content.slice(lastSpokenIndex, i + 1).trim();
             if (textToSpeak) {
               speak(textToSpeak);
               lastSpokenIndex = i + 1;
             }
-            break; // 1文ずつ処理
+            break;
           }
         }
       };
@@ -784,10 +753,8 @@ export default function ChatPage() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         const chunk = decoder.decode(value);
         const lines = chunk.split("\n");
-
         for (const line of lines) {
           if (line.startsWith("0:")) {
             try {
@@ -795,33 +762,24 @@ export default function ChatPage() {
               const data = JSON.parse(jsonStr);
               if (data && typeof data === "string") {
                 assistantMessage.content += data;
-                // 即時更新ではなく、次のフレームでまとめて更新
                 scheduleUpdate();
-                // 文末が来たら即座にTTS開始
                 checkAndSpeak();
               }
-            } catch (e) {
-              // JSON parse error, skip
-            }
+            } catch {}
           }
         }
       }
 
-      // ストリーミング完了後に最終更新を確実に反映
       setMessages((prev) => {
         const newMessages = [...prev];
         newMessages[newMessages.length - 1] = { ...assistantMessage };
         return newMessages;
       });
-
-      // 残りのテキストがあれば最後に読み上げ
       if (supportsTTS && lastSpokenIndex < assistantMessage.content.length) {
         const remainingText = assistantMessage.content
           .slice(lastSpokenIndex)
           .trim();
-        if (remainingText) {
-          speak(remainingText);
-        }
+        if (remainingText) speak(remainingText);
       }
     } catch (error) {
       console.error("Error:", error);
@@ -846,7 +804,6 @@ export default function ChatPage() {
           <ambientLight intensity={0.5} />
           <directionalLight position={[5, 5, 5]} intensity={1} />
           <directionalLight position={[-5, 5, -5]} intensity={0.5} />
-
           <Suspense fallback={null}>
             <Dog position={[0, -1.7, 0]} scale={0.7} isTalking={isTalking} />
             <Environment preset="sunset" />
@@ -857,6 +814,7 @@ export default function ChatPage() {
       {/* メッセージ入力欄（小さく、中央寄せ） */}
       <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
         <form
+          ref={formRef} // ← ★ 追加：自動submit用
           onSubmit={handleSubmit}
           className="max-w-md mx-auto flex items-center gap-2"
         >
@@ -866,6 +824,13 @@ export default function ChatPage() {
             onChange={(e) => setInput(e.target.value)}
             onFocus={handleInputFocus}
             onBlur={handleInputBlur}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+            }} // ← ★ IME開始
+            onCompositionEnd={(e) => {
+              isComposingRef.current = false;
+              setInput(e.currentTarget.value);
+            }} // ← ★ IME確定
             placeholder={
               isContinuousListening
                 ? "話しかけるか、ここに文字を入力..."
@@ -874,7 +839,7 @@ export default function ChatPage() {
             className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
             disabled={isLoading}
           />
-          {/* 手動入力時のみ送信ボタンを表示 */}
+          {/* 手動入力時のみ送信ボタンを表示（自動送信でも視覚的フィードバック用に残す） */}
           {input.trim() && (
             <button
               type="submit"
@@ -885,7 +850,18 @@ export default function ChatPage() {
             </button>
           )}
         </form>
-        {/* 常時リッスン状態の表示 */}
+
+        {/* 音声認識状態の表示 */}
+        {!hasUserInteracted && (
+          <div className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
+            👆 ページをクリックして音声認識を開始してください
+          </div>
+        )}
+        {hasUserInteracted && !isContinuousListening && (
+          <div className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
+            🎤 音声認識を開始中...
+          </div>
+        )}
         {isContinuousListening && !isManualInputRef.current && (
           <div className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
             🎤 音声を聞いています... 話しかけてください
