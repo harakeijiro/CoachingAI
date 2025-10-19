@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack -p 3000",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "setup": "bash scripts/setup.sh",
+    "check-env": "node scripts/check-env.js"
   },
   "dependencies": {
     "@ai-sdk/google": "^2.0.17",
