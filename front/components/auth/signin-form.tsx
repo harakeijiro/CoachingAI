@@ -116,30 +116,17 @@ export default function SignInForm() {
           disabled={isLoading}
           className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {isLoading ? "ログイン中..." : "ログイン"}
+          {isLoading ? "ログイン中..." : "メールアドレスでログイン"}
         </button>
       </form>
 
-      <div className="mt-6 space-y-4">
-        <div className="text-center">
-          <Link
-            href="/reset-password"
-            className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 hover:underline"
-          >
-            パスワードをお忘れですか？
-          </Link>
-        </div>
-        <div className="text-center">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            アカウントをお持ちでないですか？{" "}
-            <Link
-              href="/"
-              className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 hover:underline"
-            >
-              新規登録
-            </Link>
-          </p>
-        </div>
+      <div className="mt-4 text-center">
+        <Link
+          href="/auth/reset-password"
+          className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 hover:underline"
+        >
+          パスワードをお忘れですか？
+        </Link>
       </div>
     </div>
   );

@@ -56,7 +56,7 @@ export function Model({ isTalking, ...props }: ModelProps) {
   const { scene, animations } = useGLTF("/dog_speak_after2.glb");
   const clone = React.useMemo(() => SkeletonUtils.clone(scene), [scene]);
   const { nodes, materials } = useGraph(clone) as unknown as GLTFResult;
-  const { actions } = useAnimations(animations, group);
+  useAnimations(animations, group);
   const mouseRef = useRef<THREE.SkinnedMesh>(null!);
   const mouseInsideRef = useRef<THREE.SkinnedMesh>(null!);
 

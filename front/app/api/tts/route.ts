@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   // デフォルトボイスIDを設定（ユーザー指定のモデル）
   const voiceId = payload?.voiceId || "0cd0cde2-3b93-42b5-bcb9-f214a591aa29";
 
-  const body: any = {
+  const body = {
     transcript: text,
     model_id: modelId,
     voice: { mode: "id", id: voiceId },

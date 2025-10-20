@@ -1,5 +1,15 @@
 export const runtime = "edge";
 
+type GeminiModel = {
+  name: string;
+  displayName: string;
+  supportedGenerationMethods?: string[];
+};
+
+type GeminiModelsResponse = {
+  models?: GeminiModel[];
+};
+
 export async function GET() {
   const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   if (!key)
@@ -17,10 +27,10 @@ export async function GET() {
     });
   }
 
-  const data = await r.json();
+  const data = (await r.json()) as GeminiModelsResponse;
 
   // generateContentメソッドをサポートしているモデルのみをフィルタリング
-  const compatibleModels = data.models?.filter((model: any) =>
+  const compatibleModels = data.models?.filter((model) =>
     model.supportedGenerationMethods?.includes("generateContent")
   );
 
@@ -29,7 +39,7 @@ export async function GET() {
       total: data.models?.length || 0,
       compatible: compatibleModels?.length || 0,
       models:
-        compatibleModels?.map((m: any) => ({
+        compatibleModels?.map((m) => ({
           name: m.name,
           displayName: m.displayName,
           supportedMethods: m.supportedGenerationMethods,

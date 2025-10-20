@@ -1,3 +1,8 @@
+type Message = {
+  role: string;
+  content: string;
+};
+
 export async function POST(req: Request) {
   const { messages } = await req.json();
 
@@ -13,7 +18,7 @@ export async function POST(req: Request) {
 
   // 最後のユーザーメッセージを取得
   const lastUserMessage =
-    messages.filter((m: any) => m.role === "user").pop()?.content || "";
+    (messages as Message[]).filter((m) => m.role === "user").pop()?.content || "";
 
   try {
     // 環境変数からモデル名を取得（デフォルトはgemini-2.5-flash）
@@ -84,7 +89,7 @@ export async function POST(req: Request) {
                       controller.enqueue(encoder.encode(payload));
                     }
                   }
-                } catch (e) {
+                } catch {
                   // JSONパースエラーは無視（不完全なチャンクの可能性）
                 }
               }

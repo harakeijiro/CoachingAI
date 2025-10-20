@@ -4,6 +4,7 @@ import { Suspense, useRef, useEffect, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Environment } from "@react-three/drei";
 import { Model as Dog } from "@/components/chat/Dog";
+import AuthGuard from "@/components/auth/auth-guard";
 
 type Message = {
   id: string;
@@ -11,7 +12,51 @@ type Message = {
   content: string;
 };
 
-export default function ChatPage() {
+// Web Speech API の型定義
+interface ISpeechRecognition extends EventTarget {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((event: ISpeechRecognitionEvent) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: ISpeechRecognitionErrorEvent) => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+interface ISpeechRecognitionEvent extends Event {
+  resultIndex: number;
+  results: ISpeechRecognitionResultList;
+}
+
+interface ISpeechRecognitionResultList {
+  length: number;
+  item(index: number): ISpeechRecognitionResult;
+  [index: number]: ISpeechRecognitionResult;
+}
+
+interface ISpeechRecognitionResult {
+  isFinal: boolean;
+  length: number;
+  item(index: number): ISpeechRecognitionAlternative;
+  [index: number]: ISpeechRecognitionAlternative;
+}
+
+interface ISpeechRecognitionAlternative {
+  transcript: string;
+  confidence: number;
+}
+
+interface ISpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message: string;
+}
+
+interface ISpeechRecognitionConstructor {
+  new (): ISpeechRecognition;
+}
+
+function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -24,12 +69,11 @@ export default function ChatPage() {
   const MIN_AUTO_CHARS = 4; // ← 最小文字数
 
   // 音声入力関連
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [supportsSpeech, setSupportsSpeech] = useState(false);
   const [isContinuousListening, setIsContinuousListening] = useState(false);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastSpeechTimeRef = useRef<number>(0);
   const isManualInputRef = useRef<boolean>(false);
 
   // 追加：発話テキストの整形・重複ガード・（音声経路でも利用）
@@ -45,7 +89,6 @@ export default function ChatPage() {
   };
 
   // ====== 音量監視（割り込み用：あなたの既存ロジック） ======
-  const [isMonitoringVolume, setIsMonitoringVolume] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const microphoneRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -55,8 +98,12 @@ export default function ChatPage() {
   const startVolumeMonitoring = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const audioContext = new (window.AudioContext ||
-        (window as any).webkitAudioContext)();
+      const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) {
+        console.error("AudioContext is not supported");
+        return;
+      }
+      const audioContext = new AudioContextClass();
       const analyser = audioContext.createAnalyser();
       const microphone = audioContext.createMediaStreamSource(stream);
 
@@ -66,8 +113,6 @@ export default function ChatPage() {
       audioContextRef.current = audioContext;
       analyserRef.current = analyser;
       microphoneRef.current = microphone;
-
-      setIsMonitoringVolume(true);
 
       volumeCheckIntervalRef.current = setInterval(() => {
         if (isSpeaking && analyser) {
@@ -113,7 +158,6 @@ export default function ChatPage() {
     try {
       audioContextRef.current?.close();
     } catch {}
-    setIsMonitoringVolume(false);
   };
 
   // 音声合成（TTS）関連
@@ -139,8 +183,8 @@ export default function ChatPage() {
   useEffect(() => {
     const SR =
       (typeof window !== "undefined" &&
-        ((window as any).SpeechRecognition ||
-          (window as any).webkitSpeechRecognition)) ||
+        ((window as typeof window & { SpeechRecognition?: ISpeechRecognitionConstructor; webkitSpeechRecognition?: ISpeechRecognitionConstructor }).SpeechRecognition ||
+          (window as typeof window & { SpeechRecognition?: ISpeechRecognitionConstructor; webkitSpeechRecognition?: ISpeechRecognitionConstructor }).webkitSpeechRecognition)) ||
       null;
 
     if (SR) {
@@ -150,7 +194,7 @@ export default function ChatPage() {
       recognition.interimResults = true;
       recognition.continuous = true;
 
-      recognition.onresult = (event: any) => {
+      recognition.onresult = (event: ISpeechRecognitionEvent) => {
         let interim = "";
         let finalText = "";
         for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -208,7 +252,7 @@ export default function ChatPage() {
         }
       };
 
-      recognition.onerror = (event: any) => {
+      recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
         console.log("Recognition error:", event.error);
         setIsRecording(false);
 
@@ -242,9 +286,11 @@ export default function ChatPage() {
       try {
         recognitionRef.current?.stop();
       } catch {}
-      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+      const timeoutId = silenceTimeoutRef.current;
+      if (timeoutId) clearTimeout(timeoutId);
       stopVolumeMonitoring();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ユーザーインタラクション検知用
@@ -333,7 +379,7 @@ export default function ChatPage() {
 
     return () => {
       try {
-        (synth as any).onvoiceschanged = null;
+        synth.onvoiceschanged = null;
       } catch {}
       try {
         synth.cancel();
@@ -520,7 +566,7 @@ export default function ChatPage() {
       const decoder = new TextDecoder();
       if (!reader) throw new Error("No reader");
 
-      let assistantMessage: Message = {
+      const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: "",
@@ -661,6 +707,7 @@ export default function ChatPage() {
     return () => {
       if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input, isLoading]);
 
   // ====== メッセージ送信（手動ボタン/自動requestSubmit 共通） ======
@@ -711,7 +758,7 @@ export default function ChatPage() {
       const decoder = new TextDecoder();
       if (!reader) throw new Error("No reader");
 
-      let assistantMessage: Message = {
+      const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: "",
@@ -869,5 +916,13 @@ export default function ChatPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ChatPageWithAuth() {
+  return (
+    <AuthGuard>
+      <ChatPage />
+    </AuthGuard>
   );
 }
