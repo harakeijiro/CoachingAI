@@ -138,25 +138,25 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Next.js specific (front directory)
-front/.next/
-front/out/
-front/build
-front/.DS_Store
-front/*.pem
+# Next.js build output
+.next/
+out/
+build/
+.DS_Store
+*.pem
 
 # Debug logs
-front/npm-debug.log*
-front/yarn-debug.log*
-front/yarn-error.log*
-front/.pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
 # Environment files
-front/.env*
+.env*
 
 # Vercel
-front/.vercel
+.vercel
 
 # TypeScript
-front/*.tsbuildinfo
-front/next-env.d.ts
+*.tsbuildinfo
+next-env.d.ts

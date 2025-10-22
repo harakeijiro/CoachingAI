@@ -7,17 +7,16 @@
 ### ステップ1: 環境変数ファイルの作成（30秒）
 
 ```bash
-cd front
 cp .env.example .env.local
 ```
 
 エディタで `.env.local` を開き、以下の4つのAPIキーを設定してください：
 
 ```env
-SUPABASE_URL=（あなたのSupabase URL）
-SUPABASE_ANON_KEY=（あなたのSupabase Anon Key）
-GOOGLE_GENERATIVE_AI_API_KEY=（あなたのGemini APIキー）
-CARTESIA_API_KEY=（あなたのCartesia APIキー）
+SUPABASE_URL=https://zvwvumtnwzzfiedfijjv.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp2d3Z1bXRud3p6ZmllZGZpamp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NjYxMjgsImV4cCI6MjA3NDM0MjEyOH0.X4HxHnpaZHUmXONVC-QmBAUImQAflg2QbtBies_gD6Q
+GOOGLE_GENERATIVE_AI_API_KEY=AIzaSyCptXJXYigc1RNPtWScjv-1sfeAhQpALAs
+CARTESIA_API_KEY=sk_car_UfoJsoUQeGdb2Cebn7mAZA
 ```
 
 ### ステップ2: 依存関係のインストール（1-2分）
@@ -74,10 +73,10 @@ yarn dev
 
 Supabaseダッシュボード > SQL Editor で以下のファイルを順番に実行：
 
-1. `supabase/migrations/001_create_users_table.sql`
-2. `supabase/migrations/002_create_characters_table.sql`
-3. `supabase/migrations/003_create_conversations_table.sql`
-4. `supabase/migrations/004_create_memories_table.sql`
+1. `../supabase/migrations/001_create_users_table.sql`
+2. `../supabase/migrations/002_create_characters_table.sql`
+3. `../supabase/migrations/003_create_conversations_table.sql`
+4. `../supabase/migrations/004_create_memories_table.sql`
 
 **実行方法**:
 1. SQL Editorを開く
@@ -131,10 +130,10 @@ yarn dev -- -p 3001
 
 ## 📚 さらに詳しく
 
-- **詳細なセットアップガイド**: [SETUP_GUIDE.md](./SETUP_GUIDE.md)
-- **プロジェクトの構造**: [front/README.md](./front/README.md)
-- **要件定義**: [documents/要件定義書.md](./documents/要件定義書.md)
-- **DB設計**: [documents/DB設計書.md](./documents/DB設計書.md)
+- **詳細なセットアップガイド**: [../SETUP_GUIDE.md](../SETUP_GUIDE.md)
+- **プロジェクトの構造**: [README.md](./README.md)
+- **要件定義**: [../documents/要件定義書.md](../documents/要件定義書.md)
+- **DB設計**: [../documents/DB設計書.md](../documents/DB設計書.md)
 
 ---
 
@@ -163,7 +162,6 @@ yarn lint
 
 これで開発を始められます。
 
-質問があれば [SETUP_GUIDE.md](./SETUP_GUIDE.md) を参照するか、プロジェクトの管理者に問い合わせてください。
+質問があれば [../SETUP_GUIDE.md](../SETUP_GUIDE.md) を参照するか、プロジェクトの管理者に問い合わせてください。
 
 Happy Coding! 🚀
-

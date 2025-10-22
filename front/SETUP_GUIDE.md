@@ -41,7 +41,6 @@
 ### ステップ1: `.env.local` ファイルの作成
 
 ```bash
-cd /Users/keikei/dev/CoachingAI/front
 cp .env.example .env.local
 ```
 
@@ -88,8 +87,8 @@ nano .env.local
 3. `.env.local` に貼り付け：
 
 ```env
-SUPABASE_URL=https://abcdefghijklmnop.supabase.co
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_URL=https://zvwvumtnwzzfiedfijjv.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp2d3Z1bXRud3p6ZmllZGZpamp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg3NjYxMjgsImV4cCI6MjA3NDM0MjEyOH0.X4HxHnpaZHUmXONVC-QmBAUImQAflg2QbtBies_gD6Q
 ```
 
 ### 3. データベースのマイグレーション
@@ -102,19 +101,19 @@ SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 #### ① `001_create_users_table.sql` を実行
 
-`/Users/keikei/dev/CoachingAI/supabase/migrations/001_create_users_table.sql` の内容をコピー＆ペーストして **Run** をクリック
+`../supabase/migrations/001_create_users_table.sql` の内容をコピー＆ペーストして **Run** をクリック
 
 #### ② `002_create_characters_table.sql` を実行
 
-`/Users/keikei/dev/CoachingAI/supabase/migrations/002_create_characters_table.sql` の内容をコピー＆ペーストして **Run** をクリック
+`../supabase/migrations/002_create_characters_table.sql` の内容をコピー＆ペーストして **Run** をクリック
 
 #### ③ `003_create_conversations_table.sql` を実行
 
-`/Users/keikei/dev/CoachingAI/supabase/migrations/003_create_conversations_table.sql` の内容をコピー＆ペーストして **Run** をクリック
+`../supabase/migrations/003_create_conversations_table.sql` の内容をコピー＆ペーストして **Run** をクリック
 
 #### ④ `004_create_memories_table.sql` を実行
 
-`/Users/keikei/dev/CoachingAI/supabase/migrations/004_create_memories_table.sql` の内容をコピー＆ペーストして **Run** をクリック
+`../supabase/migrations/004_create_memories_table.sql` の内容をコピー＆ペーストして **Run** をクリック
 
 ### 4. 認証設定（パスワードリセット機能用）
 
@@ -144,7 +143,7 @@ https://ai.google.dev/ にアクセス
 ### 3. `.env.local` に設定
 
 ```env
-GOOGLE_GENERATIVE_AI_API_KEY=AIzaSy...（あなたのAPIキー）
+GOOGLE_GENERATIVE_AI_API_KEY=AIzaSyCptXJXYigc1RNPtWScjv-1sfeAhQpALAs
 ```
 
 ### 注意事項
@@ -177,7 +176,7 @@ https://cartesia.ai/ にアクセス
 ### 4. `.env.local` に設定
 
 ```env
-CARTESIA_API_KEY=your-cartesia-api-key
+CARTESIA_API_KEY=sk_car_UfoJsoUQeGdb2Cebn7mAZA
 ```
 
 ### 注意事項
@@ -192,7 +191,6 @@ CARTESIA_API_KEY=your-cartesia-api-key
 ### 1. 依存関係のインストール
 
 ```bash
-cd /Users/keikei/dev/CoachingAI/front
 yarn install
 ```
 
@@ -358,7 +356,7 @@ const { data: characters } = await supabase
 **原因**: 環境変数が正しく設定されていない
 
 **解決策**:
-1. `.env.local` ファイルが `front/` ディレクトリに存在するか確認
+1. `.env.local` ファイルが現在のディレクトリに存在するか確認
 2. ファイル名が正確に `.env.local` であることを確認（`.env` ではない）
 3. 開発サーバーを再起動: `Ctrl+C` → `yarn dev`
 
@@ -471,4 +469,3 @@ Vercelにデプロイする場合：
 - ✅ 音声合成（Cartesia TTS）
 
 Happy Coding! 🎉
-

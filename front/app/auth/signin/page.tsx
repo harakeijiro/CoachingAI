@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import SignInForm from "@/components/auth/signin-form";
 import SocialLoginButtons from "@/components/auth/social-login-buttons";
 
 export default function SignInPage() {
@@ -33,7 +32,7 @@ export default function SignInPage() {
             ログイン
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            アカウントにログインして続ける
+            ソーシャルアカウントでログイン
           </p>
         </div>
 
@@ -54,28 +53,12 @@ export default function SignInPage() {
           </div>
         )}
 
-        {/* メインコンテンツ */}
+        {/* メインコンテンツ（ソーシャルログインのみ） */}
         <div className="bg-white dark:bg-gray-800 py-8 px-6 shadow-xl rounded-2xl border border-gray-200 dark:border-gray-700">
-          {/* ソーシャルログインボタン */}
           <SocialLoginButtons
             onSuccess={handleSuccess}
             onError={handleError}
           />
-
-          {/* 区切り線 */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300 dark:border-gray-600" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                またはメールアドレスでログイン
-              </span>
-            </div>
-          </div>
-
-          {/* メールログインフォーム */}
-          <SignInForm />
         </div>
 
         {/* 新規登録リンク */}

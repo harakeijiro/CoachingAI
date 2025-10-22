@@ -5,8 +5,13 @@
  * 必要な環境変数が正しく設定されているか確認します
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ES Modules用の__dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // 必須の環境変数
 const REQUIRED_VARS = [

@@ -4,8 +4,14 @@
  * Supabase接続テストスクリプト
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import https from 'https';
+
+// ES Modules用の__dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // 環境変数を読み込み
 const envPath = path.join(__dirname, '..', '.env.local');
@@ -33,7 +39,6 @@ console.log(`📍 URL: ${SUPABASE_URL}`);
 console.log(`🔑 Key: ${SUPABASE_ANON_KEY.substring(0, 20)}...\n`);
 
 // HTTPSリクエストを使用してテスト
-const https = require('https');
 
 // テスト1: APIエンドポイントの確認
 console.log('テスト1: APIエンドポイントの確認');

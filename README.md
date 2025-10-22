@@ -28,7 +28,7 @@ yarn dev
 
 ブラウザで http://localhost:3000 を開いてください。
 
-📖 詳細は **[QUICK_START.md](./QUICK_START.md)** を参照
+📖 詳細は **[front/QUICK_START.md](./front/QUICK_START.md)** を参照
 
 ---
 
@@ -36,8 +36,8 @@ yarn dev
 
 ### セットアップ関連
 
-- **[🚀 QUICK_START.md](./QUICK_START.md)** - 最短でセットアップする手順
-- **[📖 SETUP_GUIDE.md](./SETUP_GUIDE.md)** - 詳細なセットアップガイド
+- **[🚀 QUICK_START.md](./front/QUICK_START.md)** - 最短でセットアップする手順
+- **[📖 SETUP_GUIDE.md](./front/SETUP_GUIDE.md)** - 詳細なセットアップガイド
 - **[🗄️ MIGRATION_GUIDE.md](./supabase/MIGRATION_GUIDE.md)** - Supabaseマイグレーション手順
 
 ### プロジェクト設計
@@ -62,6 +62,7 @@ yarn dev
 | 認証 | Supabase Auth | ^2.58.0 |
 | AI/LLM | Google Gemini API | - |
 | 音声合成 | Cartesia TTS | - |
+| AI連携 | Vercel AI SDK | - |
 | デプロイ | Vercel | - |
 
 ---
@@ -77,19 +78,24 @@ yarn dev
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini APIキー | [Google AI Studio](https://ai.google.dev/) |
 | `CARTESIA_API_KEY` | Cartesia TTS APIキー | [Cartesia](https://cartesia.ai/) |
 
-詳細は **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** を参照してください。
+詳細は **[front/SETUP_GUIDE.md](./front/SETUP_GUIDE.md)** を参照してください。
 
 ---
 
 ## 🎯 主な機能
 
+### 実装済み機能
+
 - ✅ **ユーザー認証**: サインアップ、ログイン、パスワードリセット
 - ✅ **AI対話**: Google Gemini APIを使用した自然な会話
 - ✅ **音声合成**: Cartesia TTSによる音声応答
 - ✅ **3Dキャラクター**: Three.jsによる3Dモデル表示
-- 🚧 **キャラクター設定**: パーソナリティや外見のカスタマイズ（開発中）
-- 🚧 **会話履歴**: 過去の対話の保存と参照（開発中）
-- 🚧 **記憶機能**: ユーザー情報の学習と記憶（開発中）
+
+### 開発中・予定機能
+
+- 🚧 **キャラクター設定**: パーソナリティや外見のカスタマイズ
+- 🚧 **会話履歴**: 過去の対話の保存と参照
+- 🚧 **記憶機能**: ユーザー情報の学習と記憶
 
 ---
 
@@ -99,18 +105,28 @@ yarn dev
 CoachingAI/
 ├── front/                    # Next.jsフロントエンド
 │   ├── app/                  # App Router
-│   │   ├── (auth)/          # 認証ページ
-│   │   ├── (chat)/          # チャットページ
+│   │   ├── auth/            # 認証関連ページ
+│   │   │   ├── signin/      # ログインページ
+│   │   │   ├── signup/      # 新規登録ページ
+│   │   │   └── reset-password/ # パスワードリセット
+│   │   ├── chat/            # チャットページ
 │   │   └── api/             # API Routes
 │   ├── components/          # Reactコンポーネント
+│   │   ├── auth/           # 認証関連コンポーネント
+│   │   └── chat/           # チャット関連コンポーネント
 │   ├── lib/                 # ユーティリティとロジック
+│   │   ├── actions/        # Server Actions
+│   │   ├── supabase/       # Supabaseクライアント
+│   │   └── types/          # 型定義
 │   ├── scripts/             # セットアップスクリプト
+│   ├── QUICK_START.md      # クイックスタートガイド
+│   ├── SETUP_GUIDE.md      # 詳細セットアップガイド
 │   └── package.json
 ├── supabase/                # Supabase設定
+│   ├── EXECUTE_THIS_SQL.md  # SQL実行ガイド
+│   ├── MIGRATION_GUIDE.md  # マイグレーションガイド
 │   └── migrations/          # DBマイグレーション
 ├── documents/               # プロジェクト設計書
-├── QUICK_START.md          # クイックスタートガイド
-├── SETUP_GUIDE.md          # 詳細セットアップガイド
 └── README.md               # このファイル
 ```
 
@@ -145,7 +161,17 @@ yarn lint
 - **Row Level Security (RLS)**: すべてのテーブルでRLSが有効
 - **環境変数**: APIキーは`.env.local`で管理（`.gitignore`で除外）
 - **認証**: Supabase Authによる安全な認証フロー
+- **Server Actions**: Next.js Server Actionsを使用してAPIキーをクライアントに公開しない
 - **CORS**: 適切なCORS設定
+
+### Server Actionsについて
+
+このプロジェクトでは、環境変数の保護とセキュリティのため、認証処理に Next.js の Server Actions を使用しています：
+
+- `lib/actions/auth.ts`: 認証関連の Server Actions
+- `lib/supabase/server.ts`: サーバー専用 Supabase クライアント
+
+これにより、Supabase の API キーがクライアントに公開されることを防いでいます。
 
 ---
 
@@ -193,7 +219,7 @@ yarn lint
 - → Supabaseマイグレーションを実行
 - → [MIGRATION_GUIDE.md](./supabase/MIGRATION_GUIDE.md) を参照
 
-詳細は **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** のトラブルシューティングセクションを参照してください。
+詳細は **[front/SETUP_GUIDE.md](./front/SETUP_GUIDE.md)** のトラブルシューティングセクションを参照してください。
 
 ---
 
@@ -207,7 +233,7 @@ yarn lint
 
 質問や問題がある場合：
 
-1. **ドキュメントを確認**: [SETUP_GUIDE.md](./SETUP_GUIDE.md)
+1. **ドキュメントを確認**: [front/SETUP_GUIDE.md](./front/SETUP_GUIDE.md)
 2. **GitHub Issues**: プロジェクトのIssuesを検索
 3. **プロジェクト管理者**: 管理者に問い合わせ
 

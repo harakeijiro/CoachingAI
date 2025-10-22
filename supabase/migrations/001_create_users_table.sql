@@ -1,6 +1,10 @@
+-- ============================================
+-- CoachingAI データベースセットアップ
+-- users テーブルの作成
+-- ============================================
+
 -- users テーブルの作成
 -- Supabase Auth の auth.users テーブルの拡張プロファイル情報を保持
-
 CREATE TABLE IF NOT EXISTS public.users (
   user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,

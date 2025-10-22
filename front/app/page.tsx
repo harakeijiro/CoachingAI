@@ -1,15 +1,29 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
       {/* ヘッダー - ナビゲーション */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800">
-        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-            CoachingAI
+        <nav className="max-w-7xl mx-auto px-0 sm:px-0 lg:px-0 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-0 -ml-6">
+            <Image
+              src="/icon-logo.png"
+              alt="CoachingAI Icon"
+              width={50}
+              height={50}
+              className="h-10 w-10"
+            />
+            <Image
+              src="/logo.png"
+              alt="CoachingAI"
+              width={600}
+              height={180}
+              className="h-32 w-auto"
+            />
           </div>
           <div className="flex items-center gap-4">
             <Link
@@ -29,20 +43,19 @@ export default function Home() {
       </header>
 
       {/* セクション1: ヒーロー */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
+      <section className="pt-32 pb-32 px-4 sm:px-6 lg:px-8 min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
         <div className="max-w-7xl mx-auto">
           <div className="text-center max-w-4xl mx-auto">
+            <div className="pt-48"></div>
             <h1 className="text-5xl md:text-7xl font-extrabold text-gray-900 dark:text-white mb-6 leading-tight">
-              あなたの成長を
-              <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
-                AIがサポート
+                話すことで、心が動く。
               </span>
             </h1>
             <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-12 leading-relaxed">
               CoachingAIは、あなた専用のAIコーチ。
               <br />
-              音声対話で自然にコミュニケーションし、目標達成までサポートします。
+              心・恋愛・キャリア、すべての対話を支える存在です。
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
@@ -58,10 +71,11 @@ export default function Home() {
                 詳しく見る
               </Link>
             </div>
+            <div className="pb-40"></div>
           </div>
           
           {/* デモ画像エリア */}
-          <div className="mt-20 relative">
+          <div className="mt-32 relative">
             <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-3xl blur-3xl opacity-20"></div>
             <div className="relative bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 border border-gray-200 dark:border-gray-700">
               <div className="aspect-video bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-gray-700 dark:to-gray-600 rounded-2xl flex items-center justify-center">
@@ -72,47 +86,34 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション2: 特徴 */}
-      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-900">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-              3つの特徴
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300">
-              CoachingAIがあなたの成長をサポートする理由
-            </p>
-          </div>
+      {/* セクション2: ミニ解説セクション */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-900">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
+            AIと話す。それだけで、少し前に進める。
+          </h2>
+          <p className="text-xl text-gray-600 dark:text-gray-300 mb-12">
+            CoachingAIは、あなた専用のAIコーチ。心・恋愛・キャリア、すべての対話を支える存在です。
+          </p>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="group p-8 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 rounded-2xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2">
-              <div className="text-5xl mb-6 group-hover:scale-110 transition-transform duration-300">🤖</div>
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+            <div className="p-6">
+              <div className="text-5xl mb-4">🤖</div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                 パーソナライズされたコーチング
               </h3>
-              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                あなたの目標や状況に合わせて、最適なアドバイスを提供。AIが学習し、より効果的なサポートを実現します。
-              </p>
             </div>
-            
-            <div className="group p-8 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-gray-800 dark:to-gray-700 rounded-2xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2">
-              <div className="text-5xl mb-6 group-hover:scale-110 transition-transform duration-300">💬</div>
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                自然な音声対話
+            <div className="p-6">
+              <div className="text-5xl mb-4">💬</div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                自然な会話体験
               </h3>
-              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                テキストだけでなく、音声での対話も可能。まるで人と話しているような自然なコミュニケーションを体験できます。
-              </p>
             </div>
-            
-            <div className="group p-8 bg-gradient-to-br from-green-50 to-teal-50 dark:from-gray-800 dark:to-gray-700 rounded-2xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2">
-              <div className="text-5xl mb-6 group-hover:scale-110 transition-transform duration-300">📈</div>
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                継続的な成長サポート
+            <div className="p-6">
+              <div className="text-5xl mb-4">📈</div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                継続的なサポート
               </h3>
-              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                日々の進捗を記録し、長期的な目標達成をサポート。あなたの成長を可視化し、モチベーションを維持します。
-              </p>
             </div>
           </div>
         </div>
@@ -170,58 +171,37 @@ export default function Home() {
         </div>
       </section>
 
-      {/* セクション4: CTA（Call to Action） */}
+      {/* セクション4: 最終CTAセクション */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-indigo-600 to-purple-600">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-            今すぐ始めませんか？
+            話すことで、心が整う。
           </h2>
           <p className="text-xl text-indigo-100 mb-10">
-            無料でアカウントを作成して、あなた専用のAIコーチと対話を始めましょう
+            1分で始められる、AIとのパーソナルコーチング。
           </p>
           <Link
             href="/auth/signup"
             className="inline-block bg-white hover:bg-gray-100 text-indigo-600 font-bold py-4 px-12 rounded-full text-lg transition-all duration-200 shadow-2xl hover:scale-105"
           >
-            無料で始める →
+            AIと話してみる（無料）
           </Link>
         </div>
       </section>
 
       {/* フッター */}
       <footer className="py-12 px-4 sm:px-6 lg:px-8 bg-gray-900 text-gray-300">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-            <div>
-              <h3 className="text-white font-bold text-xl mb-4">CoachingAI</h3>
-              <p className="text-sm">
-                あなたの成長をサポートするAIコーチングプラットフォーム
-              </p>
-            </div>
-            <div>
-              <h4 className="text-white font-semibold mb-4">プロダクト</h4>
-              <ul className="space-y-2 text-sm">
-                <li><Link href="#features" className="hover:text-white transition-colors">特徴</Link></li>
-                <li><Link href="/chat" className="hover:text-white transition-colors">チャット</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-white font-semibold mb-4">アカウント</h4>
-              <ul className="space-y-2 text-sm">
-                <li><Link href="/auth/signup" className="hover:text-white transition-colors">新規登録</Link></li>
-                <li><Link href="/auth/signin" className="hover:text-white transition-colors">ログイン</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="text-white font-semibold mb-4">サポート</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-white transition-colors">ヘルプ</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">お問い合わせ</a></li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-gray-800 pt-8 text-center text-sm">
-            <p>&copy; 2025 CoachingAI. All rights reserved.</p>
+        <div className="max-w-7xl mx-auto text-center">
+          <h3 className="text-white font-bold text-xl mb-4">CoachingAI</h3>
+          <p className="text-sm mb-6">
+            言葉にすることで、前に進める。
+          </p>
+          <div className="flex justify-center space-x-6 text-sm">
+            <a href="#" className="hover:text-white transition-colors">利用規約</a>
+            <a href="#" className="hover:text-white transition-colors">プライバシー</a>
+            <a href="#" className="hover:text-white transition-colors">ヘルプ</a>
+            <Link href="/auth/signin" className="hover:text-white transition-colors">ログイン</Link>
+            <Link href="/auth/signup" className="hover:text-white transition-colors">登録</Link>
           </div>
         </div>
       </footer>

@@ -46,6 +46,24 @@ export default function SocialLoginButtons({
         return;
       }
 
+      // Microsoft認証の追加
+      if (providerLabel === "Microsoft") {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "azure",
+          options: {
+            redirectTo: `${getAppUrl()}/chat`,
+            scopes: "openid email profile",
+          },
+        });
+
+        if (error) {
+          onError?.("Microsoftでのログインに失敗しました");
+          setIsLoading(null);
+        }
+        // 成功時はリダイレクトされるため、以降の処理は不要
+        return;
+      }
+
       // 他プロバイダは未実装
       onError?.("未対応のプロバイダです");
     } catch {
@@ -104,23 +122,6 @@ export default function SocialLoginButtons({
         </span>
       </button>
 
-      {/* Apple */}
-      <button
-        type="button"
-        onClick={() => handleSocialLogin("Apple")}
-        disabled={isLoading !== null}
-        className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-black dark:bg-white hover:bg-gray-900 dark:hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="white">
-          <path
-            className="dark:fill-black"
-            d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"
-          />
-        </svg>
-        <span className="text-sm font-medium text-white dark:text-black">
-          {isLoading === "Apple" ? "接続中..." : "Appleで続ける"}
-        </span>
-      </button>
     </div>
   );
 }
