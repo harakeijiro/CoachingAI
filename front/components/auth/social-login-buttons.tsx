@@ -33,7 +33,7 @@ export default function SocialLoginButtons({
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
-            redirectTo: `${getAppUrl()}/chat`,
+            redirectTo: `${getAppUrl()}/decision`,
             scopes: "openid email profile",
           },
         });
@@ -51,7 +51,7 @@ export default function SocialLoginButtons({
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "azure",
           options: {
-            redirectTo: `${getAppUrl()}/chat`,
+            redirectTo: `${getAppUrl()}/decision`,
             scopes: "openid email profile",
           },
         });

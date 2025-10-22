@@ -15,6 +15,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        console.log("AuthGuard: Starting auth check");
         const supabase = createBrowserClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
           process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -22,21 +23,29 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         
         const { data: { user }, error } = await supabase.auth.getUser();
         
+        console.log("AuthGuard: Auth check result:", { 
+          user: user?.id, 
+          error: error?.message 
+        });
+        
         if (error || !user) {
-          router.push("/auth/signin");
+          console.log("AuthGuard: Not authenticated, redirecting to /auth");
+          router.push("/auth");
           return;
         }
         
         // メール確認が完了しているかチェック
         if (!user.email_confirmed_at) {
-          router.push("/auth/signin?message=メール確認が完了していません");
+          console.log("AuthGuard: Email not confirmed, redirecting to /auth");
+          router.push("/auth?message=メール確認が完了していません");
           return;
         }
         
+        console.log("AuthGuard: Authentication successful");
         setIsAuthenticated(true);
       } catch (error) {
-        console.error("Auth check error:", error);
-        router.push("/auth/signin");
+        console.error("AuthGuard: Auth check error:", error);
+        router.push("/auth");
       }
     };
     

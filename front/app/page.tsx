@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import Logo from "@/components/ui/logo";
 
 export default function Home() {
   return (
@@ -17,26 +18,20 @@ export default function Home() {
               height={50}
               className="h-10 w-10"
             />
-            <Image
-              src="/logo.png"
-              alt="CoachingAI"
-              width={600}
-              height={180}
-              className="h-32 w-auto"
-            />
+            <Logo size="lg" className="ml-2" />
           </div>
           <div className="flex items-center gap-4">
             <Link
-              href="/auth/signin"
+              href="/auth"
               className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 font-medium transition-colors"
             >
               ログイン
             </Link>
             <Link
-              href="/auth/signup"
+              href="/auth"
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
             >
-              新規登録
+              無料で始める
             </Link>
           </div>
         </nav>
@@ -59,7 +54,7 @@ export default function Home() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link
-                href="/auth/signup"
+                href="/auth"
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-full text-lg transition-all duration-200 shadow-2xl hover:shadow-indigo-500/50 hover:scale-105"
               >
                 無料で始める
@@ -181,7 +176,7 @@ export default function Home() {
             1分で始められる、AIとのパーソナルコーチング。
           </p>
           <Link
-            href="/auth/signup"
+            href="/auth"
             className="inline-block bg-white hover:bg-gray-100 text-indigo-600 font-bold py-4 px-12 rounded-full text-lg transition-all duration-200 shadow-2xl hover:scale-105"
           >
             AIと話してみる（無料）
@@ -200,8 +195,7 @@ export default function Home() {
             <a href="#" className="hover:text-white transition-colors">利用規約</a>
             <a href="#" className="hover:text-white transition-colors">プライバシー</a>
             <a href="#" className="hover:text-white transition-colors">ヘルプ</a>
-            <Link href="/auth/signin" className="hover:text-white transition-colors">ログイン</Link>
-            <Link href="/auth/signup" className="hover:text-white transition-colors">登録</Link>
+            <Link href="/auth" className="hover:text-white transition-colors">始める</Link>
           </div>
         </div>
       </footer>
