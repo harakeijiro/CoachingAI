@@ -15,7 +15,7 @@ export default function Logo({ size = 'md', className = '' }: LogoProps) {
 
   return (
     <div className={`font-bold ${sizeClasses[size]} ${className}`}>
-      <span className="text-white">
+      <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400">
         CoachingAI
       </span>
     </div>

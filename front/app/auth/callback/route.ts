@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // エラー時はサインインページにリダイレクト
-  console.log("Auth callback: Redirecting to auth page due to error");
-  return NextResponse.redirect(`${origin}/auth?error=認証に失敗しました`);
+  // エラー時はトップページにリダイレクト
+  console.log("Auth callback: Redirecting to home page due to error");
+  return NextResponse.redirect(`${origin}/?error=認証に失敗しました`);
 }
