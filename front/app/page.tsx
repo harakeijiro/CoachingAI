@@ -112,8 +112,8 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-indigo-900 dark:to-purple-900">
       {/* ヘッダー - ナビゲーション */}
       <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md" style={{ marginTop: '20px' }}>
-        <nav className="max-w-7xl mx-auto px-0 sm:px-0 lg:px-0 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-0 -ml-6">
+        <nav className="max-w-7xl mx-auto px-0 sm:px-0 lg:px-0 h-16 flex items-center justify-between header-nav">
+          <div className="flex items-center gap-0 -ml-6 header-logo">
             <Image
               src="/icon-logo.png"
               alt="CoachingAI Icon"
@@ -123,7 +123,7 @@ export default function Home() {
             />
             <Logo size="lg" className="ml-2" />
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 header-buttons">
             <button
               onClick={handleAuthClick}
               className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 font-medium transition-colors"
@@ -148,7 +148,11 @@ export default function Home() {
             <h1 className="text-5xl md:text-7xl font-extrabold text-gray-900 dark:text-white mb-6 leading-tight min-h-[4rem] flex justify-center items-center">
               {isHydrated && showMainText && (
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
-                  {typingText}
+                  <span className="block md:inline">
+                    話すことで
+                    <br className="md:hidden" />
+                    心が揺れる
+                  </span>
                   {showCursor && <span className="animate-pulse text-indigo-600">|</span>}
                 </span>
               )}

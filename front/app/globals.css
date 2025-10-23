@@ -55,3 +55,61 @@ body {
 .zoom-in-95 {
   animation: zoom-in 0.3s ease-out;
 }
+
+/* タイトルフェードインアニメーション */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* フェードアウトアニメーション */
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.fade-out {
+  animation: fadeOut 1s ease-out forwards;
+}
+
+/* ローディングスピナー */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* スマホ版ヘッダーの調整 */
+@media (max-width: 640px) {
+  /* ヘッダーのボタン（ログイン・無料で始める）を非表示 */
+  .header-buttons {
+    display: none;
+  }
+  
+  /* ヘッダーのナビゲーションを中央揃えに変更 */
+  .header-nav {
+    justify-content: center;
+  }
+  
+  /* ロゴ部分を中央に配置 */
+  .header-logo {
+    margin-left: 0;
+  }
+}

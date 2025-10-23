@@ -3,8 +3,9 @@
 import { Suspense, useRef, useEffect, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Environment } from "@react-three/drei";
-import { Model as Dog } from "@/components/chat/Dog";
+import { Dog } from "@/components/characters/mental/dog";
 import AuthGuard from "@/components/auth/auth-guard";
+import { requestMicrophonePermission, getMicrophoneErrorType, getMicrophoneErrorMessage } from "@/lib/utils/microphone-permission";
 
 type Message = {
   id: string;
@@ -144,6 +145,11 @@ function ChatPage() {
       }, 50);
     } catch (error) {
       console.error("Volume monitoring failed:", error);
+      // マイクの許可が拒否された場合の処理
+      if (error instanceof DOMException && error.name === "NotAllowedError") {
+        console.log("マイクの許可が拒否されました。音量監視を停止します。");
+        return;
+      }
     }
   };
 
@@ -298,13 +304,59 @@ function ChatPage() {
 
   // ユーザーインタラクション検知
   useEffect(() => {
-    const handleUserInteraction = () => {
+    const handleUserInteraction = async () => {
       setHasUserInteracted(true);
+      
+      // マイクの許可を事前に要求
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("マイクの許可が事前に得られました");
+      } catch (e) {
+        console.log("マイクの許可が事前に拒否されました:", e);
+        // エラーは無視して続行（後で再試行する）
+      }
+      
       // 一度検知したらイベントリスナーを削除
       document.removeEventListener("click", handleUserInteraction);
       document.removeEventListener("keydown", handleUserInteraction);
       document.removeEventListener("touchstart", handleUserInteraction);
     };
+
+    // キャラクター選択画面から遷移した場合、マイク許可が既に取得済みかチェック
+    const checkExistingMicrophonePermission = async () => {
+      try {
+        // マイクの許可状態をチェック（ストリームを取得して即座に停止）
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        
+        // マイク許可が既に取得済みの場合、自動的に音声認識を開始
+        console.log("✅ マイク許可が既に取得済みです。音声認識を自動開始します。");
+        setHasUserInteracted(true);
+        return;
+      } catch (e) {
+        console.log("⚠️ マイク許可が未取得です。ユーザーインタラクションを待機します。", e);
+        
+        // エラーの種類に応じた詳細ログ
+        if (e instanceof DOMException) {
+          switch (e.name) {
+            case 'NotAllowedError':
+              console.log("🔒 マイクの許可が拒否されています");
+              break;
+            case 'NotFoundError':
+              console.log("🎤 マイクが見つかりません");
+              break;
+            case 'NotSupportedError':
+              console.log("❌ マイク機能がサポートされていません");
+              break;
+            default:
+              console.log("❓ 不明なマイクエラー:", e.name);
+          }
+        }
+      }
+    };
+
+    // ページ読み込み時にマイク許可状態をチェック
+    checkExistingMicrophonePermission();
 
     document.addEventListener("click", handleUserInteraction);
     document.addEventListener("keydown", handleUserInteraction);
@@ -329,22 +381,29 @@ function ChatPage() {
 
       // マイクの許可を求めてから音声認識を開始
       const startRecognition = async () => {
-        try {
-          // マイクの許可を求める
-          await navigator.mediaDevices.getUserMedia({ audio: true });
-          console.log("マイクの許可が得られました");
+        // 共通のマイク許可処理を使用
+        const result = await requestMicrophonePermission({
+          stopAfterPermission: true,
+          errorMessage: "音声認識を使用するにはマイクの許可が必要です。"
+        });
 
+        if (result.success) {
           // 音声認識を開始
           recognitionRef.current?.start();
           setIsRecording(true);
           console.log("音声認識を開始しました");
-        } catch (e) {
-          console.log("マイクの許可が拒否されました:", e);
+        } else {
+          // エラーの種類に応じたメッセージを表示
+          const errorType = getMicrophoneErrorType(new Error(result.error));
+          const errorMessage = getMicrophoneErrorMessage(errorType);
+          alert(errorMessage);
           setHasUserInteracted(false); // 再インタラクションを促す
         }
       };
 
-      setTimeout(startRecognition, 500);
+      // 既にマイク許可が取得済みの場合は即座に開始、そうでなければ少し待機
+      const delay = hasUserInteracted ? 100 : 500;
+      setTimeout(startRecognition, delay);
     }
   }, [supportsSpeech, isContinuousListening, hasUserInteracted]);
 
@@ -898,20 +957,9 @@ function ChatPage() {
           )}
         </form>
 
-        {/* 音声認識状態の表示 */}
-        {!hasUserInteracted && (
-          <div className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
-            👆 ページをクリックして音声認識を開始してください
-          </div>
-        )}
         {hasUserInteracted && !isContinuousListening && (
           <div className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
             🎤 音声認識を開始中...
-          </div>
-        )}
-        {isContinuousListening && !isManualInputRef.current && (
-          <div className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
-            🎤 音声を聞いています... 話しかけてください
           </div>
         )}
       </div>

@@ -100,6 +100,91 @@ project/
 - [ ] 関連ファイルと近い場所にあるか
 - [ ] 責任範囲が明確か
 
+## キャラクター管理ルール
+
+### 基本原則
+- **テーマ × キャラクター × 機能** の3次元構造
+- **テーマ**: `mental` | `love` | `career`
+- **キャラクター**: `dog` | `cat` | `mike` | `kent` など
+- **機能**: `model` | `animation` | `voice` | `behavior`
+
+### ディレクトリ構造
+```
+front/components/characters/
+├── shared/                    # 全キャラクター共通
+│   ├── CharacterCanvas.tsx    # 3D表示の基本設定
+│   ├── CharacterLighting.tsx  # ライティング設定
+│   └── CharacterTypes.ts      # 共通型定義
+├── mental/                   # メンタルテーマ
+│   ├── dog/                  # 犬キャラクター
+│   │   ├── DogModel.tsx      # 3Dモデル
+│   │   ├── DogAnimations.tsx # アニメーション
+│   │   ├── DogVoice.tsx      # 音声機能
+│   │   ├── DogBehavior.tsx   # 行動制御
+│   │   ├── DogTypes.ts      # 型定義
+│   │   └── index.ts         # エクスポート統合
+│   └── cat/                  # 猫キャラクター（将来）
+├── love/                     # 恋愛テーマ
+│   ├── mike/                 # マイクキャラクター（将来）
+│   └── cat/                  # 恋愛の猫
+└── career/                   # キャリアテーマ
+    ├── kent/                 # ケントキャラクター（将来）
+    └── owl/                  # フクロウキャラクター
+```
+
+### 機能別分割ルール
+
+#### 1. Model (3Dモデル)
+- **責任**: GLTF読み込み、基本表示、マテリアル設定
+- **ファイル**: `{Character}Model.tsx`
+- **例**: `DogModel.tsx`, `CatModel.tsx`
+
+#### 2. Animations (アニメーション)
+- **責任**: ボディアニメーション、ポーズ制御
+- **ファイル**: `{Character}Animations.tsx`
+- **例**: `DogAnimations.tsx`, `CatAnimations.tsx`
+
+#### 3. Voice (音声機能)
+- **責任**: 口パクアニメーション、音声制御
+- **ファイル**: `{Character}Voice.tsx`
+- **例**: `DogVoice.tsx`, `CatVoice.tsx`
+
+#### 4. Behavior (行動制御)
+- **責任**: キャラクター固有の行動、反応
+- **ファイル**: `{Character}Behavior.tsx`
+- **例**: `DogBehavior.tsx`, `CatBehavior.tsx`
+
+### キャラクターID体系
+- **命名規則**: `{theme}-{character}-{variant?}`
+- **例**: `mental-dog`, `love-mike`, `career-kent`
+
+### 静的ファイル配置
+```
+front/public/characters/
+├── mental/
+│   ├── dog/
+│   │   └── dog_speak_after2.glb
+│   └── cat/
+│       └── cat_model.glb
+├── love/
+│   ├── mike/
+│   │   └── mike_model.glb
+│   └── cat/
+│       └── love_cat_model.glb
+└── career/
+    ├── kent/
+    │   └── kent_model.glb
+    └── owl/
+        └── owl_model.glb
+```
+
+### キャラクター管理チェックリスト
+- [ ] テーマ別ディレクトリに配置されているか
+- [ ] 機能別にファイルが分割されているか
+- [ ] キャラクターIDが命名規則に従っているか
+- [ ] 静的ファイルが適切な場所に配置されているか
+- [ ] 共通機能は`shared/`ディレクトリに配置されているか
+
 ## 例外事項
 
 ### 技術的制約
