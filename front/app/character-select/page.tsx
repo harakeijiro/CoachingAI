@@ -235,10 +235,10 @@ export default function CharacterSelectPage() {
                       <div className="text-red-500 mr-2">⚠️</div>
                       <div>
                         <p className="text-red-600 dark:text-red-400 text-sm font-medium mb-2">
-                          マイクの許可が必要です
+                          現在マイクの許可の実装中です
                         </p>
                         <p className="text-red-600 dark:text-red-400 text-sm">
-                          {micError}
+                          マイクの許可を有効にする方法をご覧ください
                         </p>
                         <div className="mt-3">
                           <button

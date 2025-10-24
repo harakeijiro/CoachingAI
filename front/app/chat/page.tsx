@@ -922,7 +922,7 @@ function ChatPage() {
         <form
           ref={formRef} // ← ★ 追加：自動submit用
           onSubmit={handleSubmit}
-          className="max-w-md mx-auto flex items-center gap-2"
+          className="max-w-30 mx-auto flex items-center gap-2"
         >
           <input
             type="text"
@@ -939,10 +939,10 @@ function ChatPage() {
             }} // ← ★ IME確定
             placeholder={
               isContinuousListening
-                ? "話しかけるか、ここに文字を入力..."
+                ? "話しかけてみて"
                 : "メッセージを入力..."
             }
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-3xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm text-center"
             disabled={isLoading}
           />
           {/* 手動入力時のみ送信ボタンを表示（自動送信でも視覚的フィードバック用に残す） */}

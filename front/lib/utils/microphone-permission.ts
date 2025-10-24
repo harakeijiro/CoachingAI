@@ -26,7 +26,7 @@ export async function requestMicrophonePermission(
 ): Promise<MicrophonePermissionResult> {
   const {
     stopAfterPermission = true,
-    errorMessage = "マイクの許可が必要です。ブラウザの設定でマイクの許可を有効にしてください。"
+    errorMessage = "現在マイクの許可の実装中です\nマイクの許可を有効にする方法をご覧ください"
   } = options;
 
   try {
@@ -88,12 +88,12 @@ export function getMicrophoneErrorType(error: Error | DOMException): string {
 export function getMicrophoneErrorMessage(errorType: string): string {
   switch (errorType) {
     case 'permission_denied':
-      return 'マイクの許可が拒否されました。ブラウザの設定でマイクの許可を有効にしてください。';
+      return '現在マイクの許可の実装中です\nマイクの許可を有効にする方法をご覧ください';
     case 'no_microphone':
       return 'マイクが見つかりません。マイクが接続されているか確認してください。';
     case 'not_supported':
       return 'お使いのブラウザではマイク機能がサポートされていません。';
     default:
-      return 'マイクの使用中にエラーが発生しました。';
+      return '現在マイクの許可の実装中です\nマイクの許可を有効にする方法をご覧ください';
   }
 }
