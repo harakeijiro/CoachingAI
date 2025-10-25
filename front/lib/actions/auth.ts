@@ -1,7 +1,7 @@
 "use server";
 
 import { createServerClient } from "@/lib/supabase/server";
-import { AuthResponse } from "@/lib/types/auth";
+import { AuthResponse } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import {
   translateAuthError,

@@ -8,7 +8,7 @@ import {
   CharacterResponse, 
   UpdateProfileRequest,
   Theme 
-} from "@/lib/types/profile";
+} from "@/lib/types";
 import { revalidatePath } from "next/cache";
 
 /**

@@ -1,66 +1,33 @@
 "use client";
 
-import { Suspense, useRef, useEffect, useState } from "react";
+import { Suspense, useRef, useEffect, useState, useCallback } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Environment } from "@react-three/drei";
+import { useRouter } from "next/navigation";
 import { Dog } from "@/components/characters/mental/dog";
 import AuthGuard from "@/components/auth/auth-guard";
 import { requestMicrophonePermission, checkMicrophonePermissionState } from "@/lib/utils/microphone-permission";
+import { useSpeechRecognition } from "@/lib/hooks/useSpeechRecognition";
+import { useTTS } from "@/lib/hooks/useTTS";
+import { useChat, type Message } from "@/lib/hooks/useChat";
+import { ChatInput } from "@/components/chat/ChatInput";
+import { MicrophonePermissionPopup } from "@/components/chat/MicrophonePermissionPopup";
 
-type Message = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-};
 
-// Web Speech API の型定義
-interface ISpeechRecognition extends EventTarget {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  onresult: ((event: ISpeechRecognitionEvent) => void) | null;
-  onend: (() => void) | null;
-  onerror: ((event: ISpeechRecognitionErrorEvent) => void) | null;
-  start: () => void;
-  stop: () => void;
-}
-
-interface ISpeechRecognitionEvent extends Event {
-  resultIndex: number;
-  results: ISpeechRecognitionResultList;
-}
-
-interface ISpeechRecognitionResultList {
-  length: number;
-  item(index: number): ISpeechRecognitionResult;
-  [index: number]: ISpeechRecognitionResult;
-}
-
-interface ISpeechRecognitionResult {
-  isFinal: boolean;
-  length: number;
-  item(index: number): ISpeechRecognitionAlternative;
-  [index: number]: ISpeechRecognitionAlternative;
-}
-
-interface ISpeechRecognitionAlternative {
-  transcript: string;
-  confidence: number;
-}
-
-interface ISpeechRecognitionErrorEvent extends Event {
-  error: string;
-  message: string;
-}
-
-interface ISpeechRecognitionConstructor {
-  new (): ISpeechRecognition;
-}
 
 function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const router = useRouter();
+
+  // 1. stateやref類
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+  const [isContinuousListening, setIsContinuousListening] = useState(false);
+  const isManualInputRef = useRef<boolean>(false);
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const speechBufferRef = useRef<string>("");
+
+  // ★追加: 音声認識コールバックを後で差し込むためのref
+  const onResultRef = useRef<(interim: string, finalText: string) => void>(() => {});
 
   // ====== フォーム自動送信用 追加 ======
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -69,34 +36,22 @@ function ChatPage() {
   const AUTO_DEBOUNCE_MS = 400; // ← デバウンス
   const MIN_AUTO_CHARS = 4; // ← 最小文字数
 
-  // チャット欄の拡張状態
-  const [isExpanded, setIsExpanded] = useState(false);
-
   // マイク状態監視用
   const [showMicPopup, setShowMicPopup] = useState(false);
   const [micPopupShown, setMicPopupShown] = useState(false); // 一度表示されたかどうかのフラグ
 
-  // 音声入力関連
-  const recognitionRef = useRef<ISpeechRecognition | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [supportsSpeech, setSupportsSpeech] = useState(false);
-  const [isContinuousListening, setIsContinuousListening] = useState(false);
-  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isManualInputRef = useRef<boolean>(false);
-
   // 追加：発話テキストの整形・重複ガード・（音声経路でも利用）
   const normalize = (t: string) => t.replace(/\s+/g, " ").trim();
   const lastSentRef = useRef<string>("");
-  const isSpeakingRef = useRef(false); // setIsSpeakingに同期
-  const shouldSend = (t: string) => {
+  const shouldSend = useCallback((t: string) => {
     const text = normalize(t);
     if (text.length < 5) return false; // ノイズ防止
     if (text === lastSentRef.current) return false; // 同一抑制
     lastSentRef.current = text;
     return true;
-  };
+  }, []);
 
-  // ====== 音量監視（割り込み用：あなたの既存ロジック） ======
+  // ====== 共通関数 ======
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const microphoneRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -136,15 +91,7 @@ function ChatPage() {
             cancelSpeaking();
             if (isContinuousListening && !isManualInputRef.current) {
               setTimeout(() => {
-                try {
-                  recognitionRef.current?.start();
-                  setIsRecording(true);
-                } catch (e) {
-                  console.log(
-                    "Recognition restart after interruption failed:",
-                    e
-                  );
-                }
+                startRecognition();
               }, 100);
             }
           }
@@ -173,137 +120,121 @@ function ChatPage() {
     } catch {}
   };
 
-  // 音声合成（TTS）関連
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [supportsTTS, setSupportsTTS] = useState(false);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const voicesRef = useRef<SpeechSynthesisVoice[] | null>(null);
-  const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+  // 2. useSpeechRecognition をここで呼ぶ（ref経由で後から差し替え）
+  const {
+    supportsSpeech,
+    isRecording,
+    startRecognition,
+    stopRecognition,
+    restartRecognition,
+  } = useSpeechRecognition({
+    isVoiceEnabled,
+    isContinuousListening,
+    isManualInput: isManualInputRef.current,
+    onResult: (interim, finalText) => {
+      // ← ここが超ポイント
+      onResultRef.current(interim, finalText);
+    },
+    onError: (error) => {
+      console.log("[useSpeechRecognition onError]", error);
+    },
+  });
 
-  // 音声キュー
-  const audioQueueRef = useRef<string[]>([]);
-  const isPlayingQueueRef = useRef(false);
+  // 3. その後に useTTS / useChat を呼ぶ。今度はダミーを渡さず、本物を渡す
+  const {
+    isSpeaking,
+    supportsTTS,
+    speak,
+    cancelSpeaking,
+    isSpeakingRef,
+  } = useTTS({
+    onTtsStart: () => {},
+    onTtsEnd: () => {},
+    stopRecognition,       // ← もうダミーじゃない
+    startVolumeMonitoring,
+    stopVolumeMonitoring,
+    restartRecognition,    // ← もうダミーじゃない
+  });
 
   // 3Dの口パク
   const isTalking = isSpeaking;
 
-  // isSpeakingRefをsetIsSpeakingと同期
-  useEffect(() => {
-    isSpeakingRef.current = isSpeaking;
-  }, [isSpeaking]);
+  const {
+    messages,
+    setMessages,
+    isLoading,
+    sendMessage,
+    handleAutoSubmit,
+  } = useChat({
+    stopRecognition,       // ← 本物
+    cancelSpeaking,
+    speak,
+    supportsTTS,
+    restartRecognition,    // ← 本物
+  });
 
-  // ====== Web Speech API 初期化（あなたの既存） ======
-  useEffect(() => {
-    const SR =
-      (typeof window !== "undefined" &&
-        ((window as typeof window & { SpeechRecognition?: ISpeechRecognitionConstructor; webkitSpeechRecognition?: ISpeechRecognitionConstructor }).SpeechRecognition ||
-          (window as typeof window & { SpeechRecognition?: ISpeechRecognitionConstructor; webkitSpeechRecognition?: ISpeechRecognitionConstructor }).webkitSpeechRecognition)) ||
-      null;
+  // 4. handleSpeechResult を定義して、最後に onResultRef.current に差し込む
+  const SILENCE_DELAY_MS = 2000;
 
-    if (SR) {
-      setSupportsSpeech(true);
-      const recognition = new SR();
-      recognition.lang = "ja-JP";
-      recognition.interimResults = true;
-      recognition.continuous = true;
+  const handleSpeechResult = useCallback(
+    (interim: string, finalText: string) => {
+      console.log("[handleSpeechResult] 呼び出し", { interim, finalText });
 
-      recognition.onresult = (event: ISpeechRecognitionEvent) => {
-        let interim = "";
-        let finalText = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) finalText += transcript;
-          else interim += transcript;
-        }
+      if (isManualInputRef.current) return;
 
-        console.log("音声認識結果:", {
-          interim,
-          finalText,
+      // UIのインプット欄に「聞き取れてるよ」を見せる
+      setInput(prev => {
+        const base = prev.replace(/（話し中….*）$/u, "");
+        return finalText
+          ? finalText
+          : base + (interim ? `（話し中…${interim}）` : "");
+      });
+
+      // バッファ更新（final > interim）
+      const latestText = (finalText || interim || "").trim();
+      if (latestText) {
+        speechBufferRef.current = latestText;
+      }
+
+      // サイレンスタイマーを張り直し
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+
+      silenceTimeoutRef.current = setTimeout(() => {
+        const textToSend = (speechBufferRef.current || "").trim();
+
+        console.log("[silence timeout] チェック", {
+          textToSend,
           isContinuousListening,
-          isManualInput: isManualInputRef.current,
         });
 
-        if (!isManualInputRef.current) {
-          setInput((prev) => {
-            const base = prev.replace(/（話し中….*）$/u, "");
-            return finalText
-              ? base + finalText
-              : base + (interim ? `（話し中…${interim}）` : "");
-          });
+        if (textToSend && isContinuousListening) {
+          console.log("[silence timeout] sendMessage 実行:", textToSend);
 
-          // finalは音声経路の即送信（既存方針）
-          if (finalText && isContinuousListening) {
-            const cleanText = finalText.trim();
-            console.log(
-              "finalText検出:",
-              cleanText,
-              "shouldSend結果:",
-              shouldSend(cleanText)
-            );
-            if (cleanText && shouldSend(cleanText)) {
-              setInput("");
-              setTimeout(() => {
-                handleAutoSubmit(cleanText);
-              }, 0);
-            }
-          }
+          sendMessage(textToSend, true); // ← ← ← ここでAPIに投げる
+          setInput("");
+          speechBufferRef.current = "";
+        } else {
+          console.log("[silence timeout] 送信スキップ");
         }
-      };
+      }, SILENCE_DELAY_MS);
+    },
+    [isContinuousListening, sendMessage]
+  );
 
-      recognition.onend = () => {
-        setIsRecording(false);
-        setInput((prev) => prev.replace(/（話し中….*）$/u, ""));
-        if (isContinuousListening && !isManualInputRef.current) {
-          setTimeout(() => {
-            try {
-              recognitionRef.current?.start();
-              setIsRecording(true);
-            } catch (e) {
-              console.log("Recognition restart failed:", e);
-            }
-          }, 100);
-        }
-      };
+  // ★このuseEffectで、最新のhandleSpeechResultをonResultRefに反映する
+  useEffect(() => {
+    onResultRef.current = handleSpeechResult;
+  }, [handleSpeechResult]);
 
-      recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
-        console.log("Recognition error:", event.error);
-        setIsRecording(false);
-
-        // NotAllowedErrorの場合はユーザーに再試行を促す
-        if (event.error === "not-allowed") {
-          console.log("マイクの許可が必要です");
-          setHasUserInteracted(false); // 再インタラクションを促す
-          return;
-        }
-
-        if (
-          isContinuousListening &&
-          !isManualInputRef.current &&
-          event.error !== "not-allowed"
-        ) {
-          setTimeout(() => {
-            try {
-              recognitionRef.current?.start();
-              setIsRecording(true);
-            } catch (e) {
-              console.log("Recognition restart after error failed:", e);
-            }
-          }, 1000);
-        }
-      };
-
-      recognitionRef.current = recognition;
-    }
-
+  // クリーンアップ処理
+  useEffect(() => {
     return () => {
-      try {
-        recognitionRef.current?.stop();
-      } catch {}
       const timeoutId = silenceTimeoutRef.current;
       if (timeoutId) clearTimeout(timeoutId);
       stopVolumeMonitoring();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ユーザーインタラクション検知用
@@ -428,8 +359,7 @@ function ChatPage() {
       if (result.success && result.stream) {
         setShowMicPopup(false);
         // 音声認識を開始
-        recognitionRef.current?.start();
-        setIsRecording(true);
+        startRecognition();
         console.log("マイク許可が得られました。音声認識を開始します。");
       } else {
         alert(result.error || "マイクの許可が必要です");
@@ -449,21 +379,21 @@ function ChatPage() {
   useEffect(() => {
     if (
       supportsSpeech &&
-      recognitionRef.current &&
       !isContinuousListening &&
       hasUserInteracted
     ) {
+      console.log("[ChatPage] 条件クリア: continuous listening を有効化します");
       setIsContinuousListening(true);
 
       // マイクの許可を求めてから音声認識を開始
-      const startRecognition = async () => {
+      const startRecognitionWithPermission = async () => {
+        console.log("[ChatPage] startRecognitionWithPermission 実行開始");
         // 新しいシンプルなマイク許可処理を使用
         const result = await requestMicrophonePermission();
 
         if (result.success && result.stream) {
           // 音声認識を開始
-          recognitionRef.current?.start();
-          setIsRecording(true);
+          startRecognition();
           console.log("音声認識を開始しました");
           
           // 自動挨拶を無効化 - 音声認識開始時の挨拶送信を停止
@@ -482,342 +412,25 @@ function ChatPage() {
 
       // 既にマイク許可が取得済みの場合は即座に開始、そうでなければ少し待機
       const delay = hasUserInteracted ? 100 : 500;
-      setTimeout(startRecognition, delay);
+      setTimeout(startRecognitionWithPermission, delay);
+    } else {
+      console.log("[ChatPage] continuous listening 未開始", {
+        supportsSpeech,
+        isContinuousListening,
+        hasUserInteracted,
+      });
     }
   }, [supportsSpeech, isContinuousListening, hasUserInteracted, messages.length]);
-
-  // ====== TTS 初期化（あなたの既存） ======
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const hasTTS =
-      "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
-    setSupportsTTS(!!hasTTS);
-    if (!hasTTS) return;
-
-    const synth = window.speechSynthesis;
-    const updateVoices = () => {
-      const v = synth.getVoices();
-      if (v && v.length) {
-        voicesRef.current = v;
-        const jaVoices = v.filter(
-          (voice) =>
-            /ja/i.test(voice.lang || "") ||
-            /日本語|Japanese/i.test(voice.name || "")
-        );
-        if (jaVoices.length > 0) {
-          console.log("📢 利用可能な日本語ボイス:");
-          jaVoices.forEach((voice) =>
-            console.log(`  - ${voice.name} (${voice.lang})`)
-          );
-        }
-      }
-    };
-    updateVoices();
-    synth.onvoiceschanged = updateVoices;
-
-    return () => {
-      try {
-        synth.onvoiceschanged = null;
-      } catch {}
-      try {
-        synth.cancel();
-      } catch {}
-    };
-  }, []);
-
-  // ====== TTS 制御（あなたの既存＋フック） ======
-  const cancelSpeaking = () => {
-    audioQueueRef.current = [];
-    isPlayingQueueRef.current = false;
-    try {
-      audioEl?.pause();
-    } catch {}
-    try {
-      window?.speechSynthesis?.cancel?.();
-    } catch {}
-    setIsSpeaking(false);
-  };
-
-  const playNextInQueue = async () => {
-    if (isPlayingQueueRef.current || audioQueueRef.current.length === 0) return;
-    isPlayingQueueRef.current = true;
-    const text = audioQueueRef.current.shift()!;
-
-    try {
-      const res = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!res.ok) throw new Error(`TTS ${res.status}`);
-      const buf = await res.arrayBuffer();
-      const blob = new Blob([buf], { type: "audio/wav" });
-      const url = URL.createObjectURL(blob);
-      const a = new Audio(url);
-      setAudioEl(a);
-      a.onplay = () => {
-        setIsSpeaking(true);
-        isSpeakingRef.current = true;
-        try {
-          recognitionRef.current?.stop();
-        } catch {}
-        setIsRecording(false);
-        startVolumeMonitoring();
-      };
-      a.onended = () => {
-        URL.revokeObjectURL(url);
-        isPlayingQueueRef.current = false;
-        onTtsEnded();
-        playNextInQueue();
-      };
-      a.onerror = () => {
-        URL.revokeObjectURL(url);
-        isPlayingQueueRef.current = false;
-        onTtsEnded();
-        playNextInQueue();
-      };
-      await a.play();
-    } catch (e) {
-      console.error("Cartesia TTS error, fallback to Web Speech API:", e);
-      try {
-        if (typeof window !== "undefined" && "speechSynthesis" in window) {
-          const synth = window.speechSynthesis;
-          const utt = new SpeechSynthesisUtterance(text);
-          utt.lang = "ja-JP";
-          utt.rate = 0.95;
-          utt.pitch = 0.85;
-          utt.volume = 1.0;
-          const vs = voicesRef.current;
-          if (vs && vs.length) {
-            const preferMale = [
-              "Otoya",
-              "Hattori",
-              "Google 日本語",
-              "Microsoft Ichiro",
-              "Kenji",
-            ];
-            const jaVoices = vs.filter(
-              (v) =>
-                /ja/i.test(v.lang || "") ||
-                /日本語|Japanese/i.test(v.name || "")
-            );
-            jaVoices.sort((a, b) => {
-              const ai = preferMale.findIndex((p) =>
-                (a.name || "").includes(p)
-              );
-              const bi = preferMale.findIndex((p) =>
-                (b.name || "").includes(p)
-              );
-              return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-            });
-            if (jaVoices[0]) utt.voice = jaVoices[0];
-          }
-          utt.onstart = () => {
-            setIsSpeaking(true);
-            isSpeakingRef.current = true;
-            try {
-              recognitionRef.current?.stop();
-            } catch {}
-            setIsRecording(false);
-            startVolumeMonitoring();
-          };
-          utt.onend = () => {
-            isPlayingQueueRef.current = false;
-            onTtsEnded();
-            playNextInQueue();
-          };
-          utt.onerror = () => {
-            isPlayingQueueRef.current = false;
-            onTtsEnded();
-            playNextInQueue();
-          };
-          utteranceRef.current = utt;
-          synth.speak(utt);
-          return;
-        }
-      } catch {}
-      setIsSpeaking(false);
-      isPlayingQueueRef.current = false;
-      playNextInQueue();
-    }
-  };
-
-  const speak = (text: string) => {
-    if (!text) return;
-    audioQueueRef.current.push(text);
-    playNextInQueue();
-  };
-
-  const onTtsEnded = () => {
-    setIsSpeaking(false);
-    isSpeakingRef.current = false;
-    stopVolumeMonitoring();
-    if (isContinuousListening && !isManualInputRef.current) {
-      setTimeout(() => {
-        try {
-          recognitionRef.current?.start();
-          setIsRecording(true);
-        } catch {}
-      }, 300);
-    }
-  };
-
-  // ====== 自動送信処理（既存） ======
-  const handleAutoSubmit = async (text: string) => {
-    if (!text.trim() || isLoading) return;
-    try {
-      recognitionRef.current?.stop();
-    } catch {}
-    setIsRecording(false);
-    cancelSpeaking();
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: text,
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsLoading(true);
-
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [...messages, userMessage].map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text().catch(() => "");
-        console.error(`API Error (${response.status}):`, errText);
-        throw new Error(
-          `Failed to fetch (${response.status}): ${errText || "no body"}`
-        );
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) throw new Error("No reader");
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "",
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-
-      let updateScheduled = false;
-      const scheduleUpdate = () => {
-        if (!updateScheduled) {
-          updateScheduled = true;
-          requestAnimationFrame(() => {
-            setMessages((prev) => {
-              const newMessages = [...prev];
-              newMessages[newMessages.length - 1] = { ...assistantMessage };
-              return newMessages;
-            });
-            updateScheduled = false;
-          });
-        }
-      };
-
-      let lastSpokenIndex = 0;
-      const sentenceEndPattern = /[。！？\n]/;
-      const checkAndSpeak = () => {
-        if (!supportsTTS) return;
-        const content = assistantMessage.content;
-        for (let i = lastSpokenIndex; i < content.length; i++) {
-          if (sentenceEndPattern.test(content[i])) {
-            const textToSpeak = content.slice(lastSpokenIndex, i + 1).trim();
-            if (textToSpeak) {
-              speak(textToSpeak);
-              lastSpokenIndex = i + 1;
-            }
-            break;
-          }
-        }
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (line.startsWith("0:")) {
-            try {
-              const jsonStr = line.substring(2);
-              const data = JSON.parse(jsonStr);
-              if (data && typeof data === "string") {
-                assistantMessage.content += data;
-                scheduleUpdate();
-                checkAndSpeak();
-              }
-            } catch {}
-          }
-        }
-      }
-
-      setMessages((prev) => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = { ...assistantMessage };
-        return newMessages;
-      });
-      if (supportsTTS && lastSpokenIndex < assistantMessage.content.length) {
-        const remainingText = assistantMessage.content
-          .slice(lastSpokenIndex)
-          .trim();
-        if (remainingText) speak(remainingText);
-      }
-    } catch (error) {
-      console.error("Error:", error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 2).toString(),
-          role: "assistant",
-          content: "エラーが発生しました。もう一度お試しください。",
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
-      if (isContinuousListening && !isManualInputRef.current) {
-        setTimeout(() => {
-          try {
-            recognitionRef.current?.start();
-            setIsRecording(true);
-          } catch (e) {
-            console.log("Recognition restart after response failed:", e);
-          }
-        }, 1000);
-      }
-    }
-  };
 
   // ====== 手動入力時の制御（既存＋IMEフラグ） ======
   const handleInputFocus = () => {
     isManualInputRef.current = true;
-    try {
-      recognitionRef.current?.stop();
-    } catch {}
-    setIsRecording(false);
+    stopRecognition();
   };
   const handleInputBlur = () => {
     isManualInputRef.current = false;
     if (!input.trim() && isContinuousListening) {
-      setTimeout(() => {
-        try {
-          recognitionRef.current?.start();
-          setIsRecording(true);
-        } catch (e) {
-          console.log("Recognition restart after manual input failed:", e);
-        }
-      }, 500);
+      restartRecognition(500, "after manual input");
     }
   };
 
@@ -851,138 +464,59 @@ function ChatPage() {
   // ====== メッセージ送信（手動ボタン/自動requestSubmit 共通） ======
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    if (isRecording) {
-      try {
-        recognitionRef.current?.stop();
-      } catch {}
-      setIsRecording(false);
-    }
-    cancelSpeaking();
-
-    const finalInput = input.replace(/（話し中….*）$/u, "");
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: finalInput,
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
+    await sendMessage(input, false);
     setInput("");
-    setIsLoading(true);
+  };
 
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [...messages, userMessage].map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
-      });
+  // キャラクター選択画面に戻る関数
+  const handleBackToCharacterSelect = () => {
+    // 現在のテーマを取得（localStorageから）
+    const theme = localStorage.getItem("coaching_ai_default_theme") || "mental";
+    router.push(`/character-select?theme=${theme}`);
+  };
 
-      if (!response.ok) {
-        const errText = await response.text().catch(() => "");
-        console.error(`API Error (${response.status}):`, errText);
-        throw new Error(
-          `Failed to fetch (${response.status}): ${errText || "no body"}`
-        );
+  // マイクボタンのクリック処理（音声認識の有効/無効切り替え）
+  const handleMicButtonClick = () => {
+    if (isVoiceEnabled) {
+      // 音声認識を無効にする
+      stopRecognition();
+      setIsVoiceEnabled(false);
+      console.log("音声認識を無効にしました");
+    } else {
+      // 音声認識を有効にする
+      if (isContinuousListening) {
+        startRecognition();
+        setIsVoiceEnabled(true);
+        console.log("音声認識を有効にしました");
       }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      if (!reader) throw new Error("No reader");
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "",
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-
-      let updateScheduled = false;
-      const scheduleUpdate = () => {
-        if (!updateScheduled) {
-          updateScheduled = true;
-          requestAnimationFrame(() => {
-            setMessages((prev) => {
-              const newMessages = [...prev];
-              newMessages[newMessages.length - 1] = { ...assistantMessage };
-              return newMessages;
-            });
-            updateScheduled = false;
-          });
-        }
-      };
-
-      let lastSpokenIndex = 0;
-      const sentenceEndPattern = /[。！？\n]/;
-      const checkAndSpeak = () => {
-        if (!supportsTTS) return;
-        const content = assistantMessage.content;
-        for (let i = lastSpokenIndex; i < content.length; i++) {
-          if (sentenceEndPattern.test(content[i])) {
-            const textToSpeak = content.slice(lastSpokenIndex, i + 1).trim();
-            if (textToSpeak) {
-              speak(textToSpeak);
-              lastSpokenIndex = i + 1;
-            }
-            break;
-          }
-        }
-      };
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (line.startsWith("0:")) {
-            try {
-              const jsonStr = line.substring(2);
-              const data = JSON.parse(jsonStr);
-              if (data && typeof data === "string") {
-                assistantMessage.content += data;
-                scheduleUpdate();
-                checkAndSpeak();
-              }
-            } catch {}
-          }
-        }
-      }
-
-      setMessages((prev) => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = { ...assistantMessage };
-        return newMessages;
-      });
-      if (supportsTTS && lastSpokenIndex < assistantMessage.content.length) {
-        const remainingText = assistantMessage.content
-          .slice(lastSpokenIndex)
-          .trim();
-        if (remainingText) speak(remainingText);
-      }
-    } catch (error) {
-      console.error("Error:", error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 2).toString(),
-          role: "assistant",
-          content: "エラーが発生しました。もう一度お試しください。",
-        },
-      ]);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   return (
     <div className="w-full h-screen flex flex-col">
+      {/* 戻るボタン */}
+      <div className="absolute top-4 left-4 z-10">
+        <button
+          onClick={handleBackToCharacterSelect}
+          className="bg-white/20 dark:bg-gray-800/20 backdrop-blur-md text-gray-900 dark:text-white rounded-full p-3 hover:bg-white/30 dark:hover:bg-gray-800/30 transition-all duration-200 shadow-lg"
+          title="キャラクター選択に戻る"
+        >
+          <svg 
+            className="w-6 h-6" 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              strokeWidth={2} 
+              d="M15 19l-7-7 7-7" 
+            />
+          </svg>
+        </button>
+      </div>
+
       {/* 3Dキャラクター表示エリア（メイン） */}
       <div className="h-screen relative">
         <Canvas camera={{ position: [0, 0, 3.5], fov: 40 }}>
@@ -996,108 +530,26 @@ function ChatPage() {
         </Canvas>
       </div>
 
-      {/* メッセージ入力欄（小さく、中央寄せ） */}
-        <div className="absolute bottom-0 left-0 right-0 px-3 py-2">
-          <div className={`mx-auto relative transition-all duration-300 ${isExpanded ? 'max-w-lg' : 'max-w-40'}`}>
-            <form
-              ref={formRef} // ← ★ 追加：自動submit用
-              onSubmit={handleSubmit}
-              className="relative"
-            >
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onFocus={() => {
-                  handleInputFocus();
-                  setIsExpanded(true);
-                }}
-                onBlur={() => {
-                  handleInputBlur();
-                  if (!input.trim()) {
-                    setIsExpanded(false);
-                  }
-                }}
-                onCompositionStart={() => {
-                  isComposingRef.current = true;
-                }} // ← ★ IME開始
-                onCompositionEnd={(e) => {
-                  isComposingRef.current = false;
-                  setInput(e.currentTarget.value);
-                }} // ← ★ IME確定
-                placeholder={
-                  isExpanded
-                    ? ""
-                    : isContinuousListening
-                    ? "話しかけてみて"
-                    : "メッセージを入力..."
-                }
-                className={`w-full px-4 py-3 border border-gray-300/30 dark:border-gray-600/30 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/20 dark:bg-gray-800/20 backdrop-blur-md text-gray-900 dark:text-white text-sm transition-all duration-300 ${isExpanded ? 'pr-12 text-left' : 'text-center'}`}
-                disabled={isLoading}
-              />
-              {isExpanded && (
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 w-10 h-10 bg-white/20 dark:bg-gray-800/20 backdrop-blur-md text-gray-900 dark:text-white rounded-full hover:bg-white/30 dark:hover:bg-gray-800/30 disabled:bg-gray-400/80 disabled:cursor-not-allowed transition-colors font-semibold text-lg flex items-center justify-center"
-                >
-                  {isLoading ? "応答中..." : "↑"}
-                </button>
-              )}
-            </form>
-            {!isExpanded && (
-              <button
-                type="submit"
-                disabled={isLoading}
-                onClick={handleSubmit}
-                className="absolute right-0 top-1/2 transform -translate-y-1/2 w-10 h-10 bg-white text-black rounded-full hover:bg-gray-100 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold text-lg flex items-center justify-center opacity-0 pointer-events-none"
-              >
-                {isLoading ? "応答中..." : "↑"}
-              </button>
-            )}
-          </div>
-
-        {hasUserInteracted && !isContinuousListening && (
-          <div className="text-center text-xs text-gray-500 dark:text-gray-400 mt-1">
-            🎤 音声認識を開始中...
-          </div>
-        )}
-      </div>
+      {/* マイクボタン（チャット欄の少し右） */}
+      <ChatInput
+        input={input}
+        setInput={setInput}
+        isLoading={isLoading}
+        isVoiceEnabled={isVoiceEnabled}
+        isContinuousListening={isContinuousListening}
+        supportsSpeech={supportsSpeech}
+        onSubmit={handleSubmit}
+        onInputFocus={handleInputFocus}
+        onInputBlur={handleInputBlur}
+        onMicButtonClick={handleMicButtonClick}
+      />
 
       {/* マイク許可ポップアップ */}
-      {showMicPopup && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-sm text-center">
-            <div className="text-5xl mb-3">🎤</div>
-
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-              マイクをオンにしてください
-            </h2>
-
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
-              音声で会話するにはマイクの使用許可が必要です。
-              <br />
-              「マイクを許可する」を押すと、ブラウザが許可ダイアログを表示します。
-            </p>
-
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={handleMicPermissionRequest}
-                className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700"
-              >
-                マイクを許可する
-              </button>
-
-              <button
-                onClick={handleCloseMicPopup}
-                className="w-full text-gray-500 dark:text-gray-400 text-xs underline"
-              >
-                後で設定する
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <MicrophonePermissionPopup
+        showMicPopup={showMicPopup}
+        onMicPermissionRequest={handleMicPermissionRequest}
+        onCloseMicPopup={handleCloseMicPopup}
+      />
     </div>
   );
 }

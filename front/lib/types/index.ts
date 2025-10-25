@@ -1,7 +1,29 @@
 /**
- * プロファイル関連の型定義
- * 画面設計書に基づく型定義
+ * 認証・プロファイル関連の型定義
+ * 統合版 - auth.ts と profile.ts を統合
  */
+
+// ==========================================
+// 認証関連の型定義
+// ==========================================
+
+export type AuthResponse = {
+  success: boolean;
+  message: string;
+  error?: string;
+};
+
+export type User = {
+  id: string;
+  email: string;
+  name?: string;
+  avatar_url?: string;
+  provider: string;
+};
+
+// ==========================================
+// プロファイル関連の型定義
+// ==========================================
 
 export type Theme = "mental" | "love" | "career";
 
