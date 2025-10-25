@@ -149,7 +149,22 @@ export default function CharacterSelectPage() {
   return (
     <AuthGuard>
       <div className="min-h-[100svh] flex items-center justify-center bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-indigo-900 dark:to-purple-900">
+        {/* テーマ変更ボタン（テーマ選択画面と同じ位置に配置） */}
+        <div className="absolute top-4 left-4 z-10">
+          <button
+            onClick={() => router.push("/theme")}
+            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-200"
+            aria-label="テーマを変更"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span className="text-sm font-medium">テーマを変更</span>
+          </button>
+        </div>
+        
         <div className="container mx-auto px-4 py-8">
+
           {/* タイトル */}
           <div className="text-center mb-8">
             <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 animate-[fadeInUp_2s_ease-out_forwards] drop-shadow-lg">
@@ -202,20 +217,6 @@ export default function CharacterSelectPage() {
             ))}
           </div>
 
-          {/* テーマ表示とテーマ変更ボタン */}
-          <div className="flex items-center justify-end space-x-2">
-            <span className="bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 px-3 py-1 rounded-full text-sm font-medium">
-              {theme === "mental" ? "メンタル・自己理解" : 
-               theme === "love" ? "恋愛・人間関係" : 
-               theme === "career" ? "キャリア・目標達成" : "テーマ"}
-            </span>
-            <button
-              onClick={() => router.push("/theme")}
-              className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 text-sm font-medium"
-            >
-              テーマを変更
-            </button>
-          </div>
         </div>
 
         {/* マイク許可モーダル */}
