@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
+import { isValidOrgUser, logUserInfo, validateSession } from "@/lib/utils/user-validation";
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -74,22 +75,26 @@ export default function AuthCallback() {
           if (sessionData.session && sessionData.session.user) {
             console.log("AuthCallback: Session found, validating session");
             
-            // セッションの有効性を確認
-            if (!sessionData.session.access_token || !sessionData.session.refresh_token) {
-              console.error("AuthCallback: Invalid initial session tokens");
-              setErrorMessage("認証セッションが無効です。もう一度登録してください。");
+            // ユーザー情報の詳細ログ
+            logUserInfo(sessionData.session.user, "AuthCallback");
+            
+            // セッションとユーザーの詳細検証
+            const validationResult = validateSession(sessionData.session);
+            if (!validationResult.isValid) {
+              console.error("AuthCallback: Session validation failed:", validationResult.reason);
+              setErrorMessage(`認証に失敗しました: ${validationResult.reason}`);
               return;
             }
             
-            // セッションの有効期限を確認
-            const now = Math.floor(Date.now() / 1000);
-            if (sessionData.session.expires_at && sessionData.session.expires_at < now) {
-              console.error("AuthCallback: Initial session expired");
-              setErrorMessage("認証セッションが期限切れです。もう一度登録してください。");
+            // ユーザーの詳細検証
+            const userValidationResult = isValidOrgUser(sessionData.session.user);
+            if (!userValidationResult.isValid) {
+              console.error("AuthCallback: User validation failed:", userValidationResult.reason);
+              setErrorMessage(`アクセス権がありません: ${userValidationResult.reason}`);
               return;
             }
             
-            console.log("AuthCallback: Session validated, redirecting to /decision");
+            console.log("AuthCallback: Session and user validated successfully, redirecting to /decision");
             setTimeout(() => {
               window.location.replace("/decision");
             }, 1000);
@@ -138,24 +143,28 @@ export default function AuthCallback() {
               });
               
               if (retrySessionData.session && retrySessionData.session.user) {
-                console.log("Auth callback: Session found on retry, validating session");
+                console.log("AuthCallback: Session found on retry, validating session");
                 
-                // セッションの有効性を確認
-                if (!retrySessionData.session.access_token || !retrySessionData.session.refresh_token) {
-                  console.error("Auth callback: Invalid retry session tokens");
-                  setErrorMessage("認証セッションが無効です。もう一度登録してください。");
+                // ユーザー情報の詳細ログ
+                logUserInfo(retrySessionData.session.user, "AuthCallback");
+                
+                // セッションとユーザーの詳細検証
+                const validationResult = validateSession(retrySessionData.session);
+                if (!validationResult.isValid) {
+                  console.error("AuthCallback: Retry session validation failed:", validationResult.reason);
+                  setErrorMessage(`認証に失敗しました: ${validationResult.reason}`);
                   return;
                 }
                 
-                // セッションの有効期限を確認
-                const now = Math.floor(Date.now() / 1000);
-                if (retrySessionData.session.expires_at && retrySessionData.session.expires_at < now) {
-                  console.error("Auth callback: Retry session expired");
-                  setErrorMessage("認証セッションが期限切れです。もう一度登録してください。");
+                // ユーザーの詳細検証
+                const userValidationResult = isValidOrgUser(retrySessionData.session.user);
+                if (!userValidationResult.isValid) {
+                  console.error("AuthCallback: Retry user validation failed:", userValidationResult.reason);
+                  setErrorMessage(`アクセス権がありません: ${userValidationResult.reason}`);
                   return;
                 }
                 
-                console.log("Auth callback: Session validated, redirecting to /decision");
+                console.log("AuthCallback: Retry session and user validated successfully, redirecting to /decision");
                 setTimeout(() => {
                   window.location.replace("/decision");
                 }, 1000);
@@ -173,28 +182,34 @@ export default function AuthCallback() {
           }
 
           if (data.user && data.session) {
-            console.log("Auth callback: Authentication successful, redirecting to /decision");
-            // セッションの有効性を確認
-            if (!data.session.access_token || !data.session.refresh_token) {
-              console.error("Auth callback: Invalid session tokens");
-              setErrorMessage("認証セッションが無効です。もう一度登録してください。");
+            console.log("AuthCallback: Authentication successful, validating user");
+            
+            // ユーザー情報の詳細ログ
+            logUserInfo(data.user, "AuthCallback");
+            
+            // セッションとユーザーの詳細検証
+            const validationResult = validateSession(data.session);
+            if (!validationResult.isValid) {
+              console.error("AuthCallback: Session validation failed:", validationResult.reason);
+              setErrorMessage(`認証に失敗しました: ${validationResult.reason}`);
               return;
             }
             
-            // セッションの有効期限を確認
-            const now = Math.floor(Date.now() / 1000);
-            if (data.session.expires_at && data.session.expires_at < now) {
-              console.error("Auth callback: Session expired");
-              setErrorMessage("認証セッションが期限切れです。もう一度登録してください。");
+            // ユーザーの詳細検証
+            const userValidationResult = isValidOrgUser(data.user);
+            if (!userValidationResult.isValid) {
+              console.error("AuthCallback: User validation failed:", userValidationResult.reason);
+              setErrorMessage(`アクセス権がありません: ${userValidationResult.reason}`);
               return;
             }
             
+            console.log("AuthCallback: User validated successfully, redirecting to /decision");
             // 少し待ってからリダイレクト（セッションの確立を待つ）
             setTimeout(() => {
               window.location.replace("/decision");
             }, 1000);
           } else {
-            console.error("Auth callback: No user or session after successful code exchange");
+            console.error("AuthCallback: No user or session after successful code exchange");
             setErrorMessage("認証に失敗しました。もう一度登録してください。");
           }
         } catch (authError) {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
+import { isValidOrgUser, logUserInfo, validateSession } from "@/lib/utils/user-validation";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -68,17 +69,21 @@ export default function AuthGuard({ children }: AuthGuardProps) {
           return;
         }
 
-        // セッションの有効性を確認
-        if (!session.access_token || !session.refresh_token) {
-          console.log("AuthGuard: Invalid session tokens, redirecting to /");
+        // ユーザー情報の詳細ログ
+        logUserInfo(session.user, "AuthGuard");
+
+        // セッションとユーザーの詳細検証
+        const validationResult = validateSession(session);
+        if (!validationResult.isValid) {
+          console.error("AuthGuard: Session validation failed:", validationResult.reason);
           router.push("/");
           return;
         }
 
-        // セッションの有効期限を確認
-        const now = Math.floor(Date.now() / 1000);
-        if (session.expires_at && session.expires_at < now) {
-          console.log("AuthGuard: Session expired, redirecting to /");
+        // ユーザーの詳細検証
+        const userValidationResult = isValidOrgUser(session.user);
+        if (!userValidationResult.isValid) {
+          console.error("AuthGuard: User validation failed:", userValidationResult.reason);
           router.push("/");
           return;
         }
