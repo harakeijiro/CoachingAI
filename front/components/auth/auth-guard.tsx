@@ -16,6 +16,11 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     const checkAuth = async () => {
       try {
         console.log("AuthGuard: Starting auth check");
+        console.log("AuthGuard: Environment variables:", {
+          url: process.env.NEXT_PUBLIC_SUPABASE_URL ? "SET" : "NOT SET",
+          key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "SET" : "NOT SET"
+        });
+        
         const supabase = createBrowserClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
           process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -25,8 +30,8 @@ export default function AuthGuard({ children }: AuthGuardProps) {
               detectSessionInUrl: true,
               persistSession: true,
               autoRefreshToken: true,
-              flowType: 'pkce', // implicitからpkceに変更してpopup.jsエラーを解決
-              debug: false
+              flowType: 'pkce',
+              debug: true // デバッグを有効化
             },
             global: {
               headers: {
@@ -36,29 +41,49 @@ export default function AuthGuard({ children }: AuthGuardProps) {
           }
         );
         
-        const { data: { user }, error } = await supabase.auth.getUser();
+        // セッションを確認
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        console.log("AuthGuard: Auth check result:", { 
-          user: user?.id, 
-          email: user?.email,
-          email_confirmed_at: user?.email_confirmed_at,
-          error: error?.message 
+        console.log("AuthGuard: Session check result:", { 
+          session: session?.user?.id, 
+          email: session?.user?.email,
+          email_confirmed_at: session?.user?.email_confirmed_at,
+          error: sessionError?.message,
+          hasSession: !!session,
+          hasUser: !!session?.user,
+          hasAccessToken: !!session?.access_token,
+          hasRefreshToken: !!session?.refresh_token,
+          expiresAt: session?.expires_at
         });
         
-        if (error || !user) {
-          console.log("AuthGuard: Not authenticated, redirecting to /");
+        if (sessionError) {
+          console.error("AuthGuard: Session error:", sessionError);
           router.push("/");
           return;
         }
         
-        // メール確認が完了しているかチェック（一時的に無効化）
-        // if (!user.email_confirmed_at) {
-        //   console.log("AuthGuard: Email not confirmed, redirecting to /");
-        //   router.push("/?message=メール確認が完了していません");
-        //   return;
-        // }
+        if (!session || !session.user) {
+          console.log("AuthGuard: No session found, redirecting to /");
+          router.push("/");
+          return;
+        }
+
+        // セッションの有効性を確認
+        if (!session.access_token || !session.refresh_token) {
+          console.log("AuthGuard: Invalid session tokens, redirecting to /");
+          router.push("/");
+          return;
+        }
+
+        // セッションの有効期限を確認
+        const now = Math.floor(Date.now() / 1000);
+        if (session.expires_at && session.expires_at < now) {
+          console.log("AuthGuard: Session expired, redirecting to /");
+          router.push("/");
+          return;
+        }
         
-        console.log("AuthGuard: Authentication successful");
+        console.log("AuthGuard: Authentication successful, setting isAuthenticated to true");
         setIsAuthenticated(true);
       } catch (error) {
         console.error("AuthGuard: Auth check error:", error);
@@ -69,15 +94,20 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     checkAuth();
   }, [router]);
 
+  console.log("AuthGuard: Render state:", { isAuthenticated });
+
   // 認証チェック中は何も表示しない（空白画面）
   if (isAuthenticated === null) {
+    console.log("AuthGuard: Still checking authentication, showing nothing");
     return null;
   }
 
   // 認証されていない場合は何も表示しない（リダイレクト中）
   if (!isAuthenticated) {
+    console.log("AuthGuard: Not authenticated, showing nothing (redirecting)");
     return null;
   }
 
+  console.log("AuthGuard: Authenticated, rendering children");
   return <>{children}</>;
 }

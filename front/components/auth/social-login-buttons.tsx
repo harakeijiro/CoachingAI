@@ -26,7 +26,21 @@ export default function SocialLoginButtons({
     try {
       const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          auth: {
+            detectSessionInUrl: true,
+            persistSession: true,
+            autoRefreshToken: true,
+            flowType: 'pkce',
+            debug: true
+          },
+          global: {
+            headers: {
+              'X-Client-Info': 'supabase-js-web'
+            }
+          }
+        }
       );
 
       if (providerLabel === "Google") {
@@ -47,12 +61,12 @@ export default function SocialLoginButtons({
         return;
       }
 
-      // Microsoft認証の追加
+      // Microsoft認証の修正
       if (providerLabel === "Microsoft") {
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "azure",
           options: {
-            redirectTo: `${getAppUrl()}/decision`,
+            redirectTo: `${getAppUrl()}/auth/callback`, // 認証コールバックを経由
             scopes: "openid email profile",
             preferRedirect: true, // ポップアップ禁止モード
           },

@@ -90,6 +90,10 @@ export default function ThemePage() {
     router.push(url);
   };
 
+  const handleBackToTop = () => {
+    router.push("/");
+  };
+
   useLayoutEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
@@ -121,9 +125,24 @@ export default function ThemePage() {
     <AuthGuard>
       {/* ✅ 全体を縦中央＆横中央に配置、少し下に下げる */}
       <div className="min-h-[100svh] flex items-center justify-center bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-indigo-900 dark:to-purple-900 pt-16">
+        {/* トップに戻るボタンを最上部に配置 */}
+        <div className="absolute top-4 left-4 z-10">
+          <button
+            onClick={handleBackToTop}
+            className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-200"
+            aria-label="トップページに戻る"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span className="text-sm font-medium">トップに戻る</span>
+          </button>
+        </div>
+        
         <div className="container mx-auto px-4">
           {/* ヘッダー */}
           <div className="text-center mb-4">
+            
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
               テーマを選んでください
             </h1>
