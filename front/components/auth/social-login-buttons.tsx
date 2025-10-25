@@ -35,6 +35,7 @@ export default function SocialLoginButtons({
           options: {
             redirectTo: `${getAppUrl()}/decision`,
             scopes: "openid email profile",
+            preferRedirect: true, // ポップアップ禁止モード
           },
         });
 
@@ -53,6 +54,7 @@ export default function SocialLoginButtons({
           options: {
             redirectTo: `${getAppUrl()}/decision`,
             scopes: "openid email profile",
+            preferRedirect: true, // ポップアップ禁止モード
           },
         });
 
@@ -73,7 +75,7 @@ export default function SocialLoginButtons({
   };
 
   return (
-    <div className="space-y-3 max-w-64 mx-auto">
+    <div className="space-y-3 max-w-80 mx-auto mb-6">
       {/* Google */}
       <button
         type="button"

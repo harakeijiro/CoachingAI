@@ -37,6 +37,24 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Next.jsのアイコン処理スクリプトエラーを無効化
+              (function() {
+                const originalAppendChild = Node.prototype.appendChild;
+                Node.prototype.appendChild = function(child) {
+                  if (child.tagName === 'LINK' && (child.rel === 'icon' || child.rel === 'apple-touch-icon')) {
+                    return child; // 何もしない
+                  }
+                  return originalAppendChild.call(this, child);
+                };
+              })();
+            `,
+          }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

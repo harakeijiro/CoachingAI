@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/ui/logo";
 import SocialLoginButtons from "@/components/auth/social-login-buttons";
+import EmailAuthForm from "@/components/auth/EmailAuthForm";
 import { useState, useEffect } from "react";
 
 export default function Home() {
@@ -14,7 +15,6 @@ export default function Home() {
   const [showMainText, setShowMainText] = useState(false);
   const [showSubText, setShowSubText] = useState(false);
   const [showButtons, setShowButtons] = useState(false);
-  const [typingText, setTypingText] = useState("");
   const [showCursor, setShowCursor] = useState(false);
   
   // 認証モーダル状態管理
@@ -38,10 +38,7 @@ export default function Home() {
   const handleAuthSuccess = (message: string) => {
     setSuccessMessage(message);
     setErrorMessage("");
-    // 認証成功時はモーダルを閉じる
-    setTimeout(() => {
-      closeAuthModal();
-    }, 2000);
+    // メール認証成功時は自動でモーダルを閉じない（ユーザーが手動で閉じるまで表示）
   };
 
   const handleAuthError = (message: string) => {
@@ -76,25 +73,18 @@ export default function Home() {
   useEffect(() => {
     setIsHydrated(true);
     
+    
     // メインテキストのタイピングアニメーション
     const timer1 = setTimeout(() => {
       setShowMainText(true);
       setShowCursor(true);
-      let currentIndex = 0;
-      const typingInterval = setInterval(() => {
-        if (currentIndex <= mainText.length) {
-          setTypingText(mainText.slice(0, currentIndex));
-          currentIndex++;
-        } else {
-          clearInterval(typingInterval);
-          // タイピング完了の瞬間にカーソルを非表示
-          setShowCursor(false);
-          // サブテキストは少し遅れて表示
-          setTimeout(() => {
-            setShowSubText(true);
-          }, 200);
-        }
-      }, 100);
+      // タイピングアニメーション完了後にサブテキストを表示
+      setTimeout(() => {
+        setShowCursor(false);
+        setTimeout(() => {
+          setShowSubText(true);
+        }, 200);
+      }, mainText.length * 100 + 500); // 文字数 × 100ms + 500ms
     }, 500);
 
     // ボタンの表示
@@ -205,7 +195,7 @@ export default function Home() {
           
           {/* 認証カード */}
           <div className="relative z-10 animate-in fade-in-0 zoom-in-95 duration-300">
-            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm py-12 px-10 shadow-2xl rounded-3xl border border-white/20 dark:border-gray-700/50 max-w-md mx-auto">
+            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm py-12 px-10 shadow-2xl rounded-3xl border border-white/20 dark:border-gray-700/50 max-w-sm mx-auto">
               {/* 閉じるボタン */}
               <button
                 onClick={closeAuthModal}
@@ -227,7 +217,7 @@ export default function Home() {
               {/* メッセージ表示 */}
               {successMessage && (
                 <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                  <p className="text-sm text-green-600 dark:text-green-400">
+                  <p className="text-sm text-green-600 dark:text-green-400 whitespace-pre-line">
                     {successMessage}
                   </p>
                 </div>
@@ -243,6 +233,9 @@ export default function Home() {
 
               {/* ソーシャルログインボタン */}
               <SocialLoginButtons onSuccess={handleAuthSuccess} onError={handleAuthError} />
+              
+              {/* メール認証フォーム */}
+              <EmailAuthForm onSuccess={handleAuthSuccess} onError={handleAuthError} />
             </div>
           </div>
         </div>

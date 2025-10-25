@@ -24,15 +24,30 @@ export default function DecisionPage() {
         const { createBrowserClient } = await import("@supabase/ssr");
         const supabase = createBrowserClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          {
+            auth: {
+              // Supabase認証設定
+              detectSessionInUrl: true,
+              persistSession: true,
+              autoRefreshToken: true,
+              flowType: 'pkce', // implicitからpkceに変更してpopup.jsエラーを解決
+              debug: false
+            },
+            global: {
+              headers: {
+                'X-Client-Info': 'supabase-js-web'
+              }
+            }
+          }
         );
         
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         console.log("Decision page: Direct auth check:", { user: user?.id, error: authError });
         
         if (authError || !user) {
-          console.log("Decision page: Not authenticated, redirecting to /auth");
-          router.push("/auth");
+          console.log("Decision page: Not authenticated, redirecting to /");
+          router.push("/");
           return;
         }
         
