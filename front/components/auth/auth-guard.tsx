@@ -69,18 +69,9 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     checkAuth();
   }, [router]);
 
-  // 認証チェック中はローディング表示
+  // 認証チェック中は何も表示しない（空白画面）
   if (isAuthenticated === null) {
-    return (
-      <div className="w-full h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            認証中...
-          </h1>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   // 認証されていない場合は何も表示しない（リダイレクト中）

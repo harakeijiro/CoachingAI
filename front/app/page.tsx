@@ -12,10 +12,9 @@ export default function Home() {
   const [isHydrated, setIsHydrated] = useState(false);
   
   // アニメーション状態管理
-  const [showMainText, setShowMainText] = useState(false);
+  const [displayedText, setDisplayedText] = useState("");
   const [showSubText, setShowSubText] = useState(false);
   const [showButtons, setShowButtons] = useState(false);
-  const [showCursor, setShowCursor] = useState(false);
   
   // 認証モーダル状態管理
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -69,31 +68,32 @@ export default function Home() {
     };
   }, [showAuthModal]);
 
-  // Hydration完了を検知とアニメーション開始
+  // Hydration完了を検知とタイピングアニメーション開始
   useEffect(() => {
     setIsHydrated(true);
     
-    
-    // メインテキストのタイピングアニメーション
-    const timer1 = setTimeout(() => {
-      setShowMainText(true);
-      setShowCursor(true);
-      // タイピングアニメーション完了後にサブテキストを表示
-      setTimeout(() => {
-        setShowCursor(false);
+    // タイピングアニメーション
+    let currentIndex = 0;
+    const typingInterval = setInterval(() => {
+      if (currentIndex < mainText.length) {
+        setDisplayedText(mainText.slice(0, currentIndex + 1));
+        currentIndex++;
+      } else {
+        clearInterval(typingInterval);
+        // タイピング完了後にサブテキストを表示
         setTimeout(() => {
           setShowSubText(true);
-        }, 200);
-      }, mainText.length * 100 + 500); // 文字数 × 100ms + 500ms
-    }, 500);
+        }, 500);
+      }
+    }, 120); // 120ms間隔で1文字ずつ表示
 
     // ボタンの表示
     const timer2 = setTimeout(() => {
       setShowButtons(true);
-    }, 3000);
+    }, mainText.length * 120 + 1500); // タイピング完了 + 1.5秒後
 
     return () => {
-      clearTimeout(timer1);
+      clearInterval(typingInterval);
       clearTimeout(timer2);
     };
   }, [mainText]);
@@ -136,14 +136,11 @@ export default function Home() {
           <div className="text-center max-w-4xl mx-auto">
             {/* メインテキスト - タイピングアニメーション */}
             <h1 className="text-5xl md:text-7xl font-extrabold text-gray-900 dark:text-white mb-6 leading-tight min-h-[4rem] flex justify-center items-center">
-              {isHydrated && showMainText && (
+              {isHydrated && (
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
                   <span className="block md:inline">
-                    話すことで
-                    <br className="md:hidden" />
-                    心が揺れる
+                    {displayedText}
                   </span>
-                  {showCursor && <span className="animate-pulse text-indigo-600">|</span>}
                 </span>
               )}
             </h1>

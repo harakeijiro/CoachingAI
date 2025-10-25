@@ -12,47 +12,12 @@ const STORAGE_KEYS = {
 
 export default function DecisionPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const checkUserStatus = async () => {
       try {
         console.log("Decision page: Starting user status check");
-        
-        // まず認証状態を再確認
-        const { createBrowserClient } = await import("@supabase/ssr");
-        const supabase = createBrowserClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          {
-            auth: {
-              // Supabase認証設定
-              detectSessionInUrl: true,
-              persistSession: true,
-              autoRefreshToken: true,
-              flowType: 'pkce', // implicitからpkceに変更してpopup.jsエラーを解決
-              debug: false
-            },
-            global: {
-              headers: {
-                'X-Client-Info': 'supabase-js-web'
-              }
-            }
-          }
-        );
-        
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        console.log("Decision page: Direct auth check:", { user: user?.id, error: authError });
-        
-        if (authError || !user) {
-          console.log("Decision page: Not authenticated, redirecting to /");
-          router.push("/");
-          return;
-        }
-        
-        // プロファイル取得を一時的にスキップして、ローカルストレージのみで判定
-        console.log("Decision page: Skipping profile fetch, using localStorage only");
         
         // ローカルストレージからキャラクター選択を確認
         const selectedCharacterId = localStorage.getItem(STORAGE_KEYS.SELECTED_CHARACTER_ID);
@@ -71,46 +36,12 @@ export default function DecisionPage() {
       } catch (err) {
         console.error("Decision page error:", err);
         setError("ユーザー情報の確認中にエラーが発生しました");
-      } finally {
-        setIsLoading(false);
       }
     };
 
     checkUserStatus();
   }, [router]);
 
-  // ローディング表示（1-2秒）
-  if (isLoading) {
-    return (
-      <AuthGuard>
-        <div className="min-h-screen bg-gradient-to-br from-white via-gray-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-indigo-900 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-6"></div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              設定を確認中...
-            </h1>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">
-              あなたに最適なコーチを準備しています
-            </p>
-            
-            {/* リセットボタン */}
-            <button
-              onClick={() => {
-                // ローカルストレージをクリア
-                localStorage.removeItem("coaching_ai_selected_character_id");
-                localStorage.removeItem("coaching_ai_default_theme");
-                // テーマ選択ページに遷移
-                router.push("/theme");
-              }}
-              className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline"
-            >
-              設定をリセット
-            </button>
-          </div>
-        </div>
-      </AuthGuard>
-    );
-  }
 
   // エラー表示（障害時の退避ボタン）
   if (error) {
