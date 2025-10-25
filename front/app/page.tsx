@@ -139,7 +139,12 @@ export default function Home() {
               {isHydrated && (
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
                   <span className="block md:inline">
-                    {displayedText}
+                    <span className="md:hidden">
+                      話すことで心が<br />揺れる
+                    </span>
+                    <span className="hidden md:inline">
+                      {displayedText}
+                    </span>
                   </span>
                 </span>
               )}
@@ -153,7 +158,7 @@ export default function Home() {
               <p className="text-lg md:text-xl text-gray-600 dark:text-gray-300 mb-8 leading-relaxed">
                 CoachingAIは、あなた専用のAIコーチ
                 <br />
-                <span className="font-bold">心  恋愛  仕事</span>  すべての対話を支える存在です
+                <span className="font-bold text-xl">心  恋愛  仕事</span>  すべての対話を支える存在です
               </p>
             </div>
             {/* ボタン - フェードイン + スケール */}
@@ -169,7 +174,7 @@ export default function Home() {
                 無料で始める
               </button>
               <Link
-                href="#features"
+                href="/features"
                 className="bg-white hover:bg-gray-50 text-indigo-600 font-bold py-3 px-8 rounded-full text-lg border-2 border-indigo-600 transition-all duration-200 hover:scale-105"
               >
                 詳しく見る
@@ -192,7 +197,7 @@ export default function Home() {
           
           {/* 認証カード */}
           <div className="relative z-10 animate-in fade-in-0 zoom-in-95 duration-300">
-            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm py-12 px-10 shadow-2xl rounded-3xl border border-white/20 dark:border-gray-700/50 max-w-sm mx-auto">
+            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm py-10 px-8 shadow-2xl rounded-3xl border border-white/20 dark:border-gray-700/50 max-w-sm mx-auto">
               {/* 閉じるボタン */}
               <button
                 onClick={closeAuthModal}
@@ -204,7 +209,7 @@ export default function Home() {
               </button>
               
               {/* ロゴ・タイトル */}
-              <div className="text-center mb-8">
+              <div className="text-center mb-8 mt-2">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center justify-center gap-3">
                   ようこそ
                   <Logo size="lg" />
@@ -213,7 +218,7 @@ export default function Home() {
 
               {/* メッセージ表示 */}
               {successMessage && (
-                <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg max-w-64 mx-auto">
                   <p className="text-sm text-green-600 dark:text-green-400 whitespace-pre-line">
                     {successMessage}
                   </p>

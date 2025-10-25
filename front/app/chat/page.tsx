@@ -5,7 +5,7 @@ import { Canvas } from "@react-three/fiber";
 import { Environment } from "@react-three/drei";
 import { Dog } from "@/components/characters/mental/dog";
 import AuthGuard from "@/components/auth/auth-guard";
-import { requestMicrophonePermission, getMicrophoneErrorType, getMicrophoneErrorMessage } from "@/lib/utils/microphone-permission";
+import { requestMicrophonePermission, checkMicrophonePermissionState } from "@/lib/utils/microphone-permission";
 
 type Message = {
   id: string;
@@ -68,6 +68,13 @@ function ChatPage() {
   const autoSubmitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const AUTO_DEBOUNCE_MS = 400; // ← デバウンス
   const MIN_AUTO_CHARS = 4; // ← 最小文字数
+
+  // チャット欄の拡張状態
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // マイク状態監視用
+  const [showMicPopup, setShowMicPopup] = useState(false);
+  const [micPopupShown, setMicPopupShown] = useState(false); // 一度表示されたかどうかのフラグ
 
   // 音声入力関連
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
@@ -322,52 +329,121 @@ function ChatPage() {
       document.removeEventListener("touchstart", handleUserInteraction);
     };
 
-    // キャラクター選択画面から遷移した場合、マイク許可が既に取得済みかチェック
-    const checkExistingMicrophonePermission = async () => {
-      try {
-        // マイクの許可状態をチェック（ストリームを取得して即座に停止）
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => track.stop());
-        
-        // マイク許可が既に取得済みの場合、自動的に音声認識を開始
-        console.log("✅ マイク許可が既に取得済みです。音声認識を自動開始します。");
-        setHasUserInteracted(true);
-        return;
-      } catch (e) {
-        console.log("⚠️ マイク許可が未取得です。ユーザーインタラクションを待機します。", e);
-        
-        // エラーの種類に応じた詳細ログ
-        if (e instanceof DOMException) {
-          switch (e.name) {
-            case 'NotAllowedError':
-              console.log("🔒 マイクの許可が拒否されています");
-              break;
-            case 'NotFoundError':
-              console.log("🎤 マイクが見つかりません");
-              break;
-            case 'NotSupportedError':
-              console.log("❌ マイク機能がサポートされていません");
-              break;
-            default:
-              console.log("❓ 不明なマイクエラー:", e.name);
+    // ページロード時の自動挨拶機能
+    const autoGreeting = async () => {
+      // 少し遅延を入れてページの読み込み完了を待つ
+      setTimeout(async () => {
+        try {
+          // マイクの許可状態をチェック
+          const micState = await checkMicrophonePermissionState();
+          
+          if (micState === "granted") {
+            // 既に許可済みの場合は自動的にインタラクションを検知
+            console.log("マイクが既に許可済みです。自動的に音声認識を開始します。");
+            setHasUserInteracted(true);
+            
+            // 自動挨拶を無効化 - メッセージもTTSも実行しない
+            // const greetingMessage: Message = {
+            //   id: Date.now().toString(),
+            //   role: "assistant",
+            //   content: "こんにちは！話しかけてみてください。何でもお聞かせください。",
+            // };
+            // setMessages([greetingMessage]);
+            
+            // TTSで挨拶を読み上げない
+            // if (supportsTTS) {
+            //   setTimeout(() => {
+            //     speak(greetingMessage.content);
+            //   }, 1000);
+            // }
+          } else {
+            // 許可されていない場合は通常のイベントリスナーを設定
+            document.addEventListener("click", handleUserInteraction);
+            document.addEventListener("keydown", handleUserInteraction);
+            document.addEventListener("touchstart", handleUserInteraction);
+            
+            // 自動挨拶を無効化 - メッセージを表示しない
+            // const greetingMessage: Message = {
+            //   id: Date.now().toString(),
+            //   role: "assistant",
+            //   content: "こんにちは！画面をクリックしてから話しかけてみてください。",
+            // };
+            // setMessages([greetingMessage]);
           }
+        } catch (error) {
+          console.log("マイク状態チェックエラー:", error);
+          // エラーの場合は通常のイベントリスナーを設定
+          document.addEventListener("click", handleUserInteraction);
+          document.addEventListener("keydown", handleUserInteraction);
+          document.addEventListener("touchstart", handleUserInteraction);
+          
+          // 自動挨拶を無効化 - エラー時もメッセージを表示しない
+          // const greetingMessage: Message = {
+          //   id: Date.now().toString(),
+          //   role: "assistant",
+          //   content: "こんにちは！画面をクリックしてから話しかけてみてください。",
+          // };
+          // setMessages([greetingMessage]);
         }
+      }, 0); // 即座に自動チェック
+    };
+
+    // 自動挨拶を開始
+    autoGreeting();
+
+    // マイク状態を定期的にチェック
+    const checkMicPermission = async () => {
+      try {
+        const state = await checkMicrophonePermissionState();
+        
+        // マイクが拒否されている場合で、まだポップアップを表示していない場合のみ表示
+        if (state === "denied" && !micPopupShown) {
+          setShowMicPopup(true);
+          setMicPopupShown(true); // 一度表示したことを記録
+        }
+      } catch (error) {
+        console.error("マイク状態チェックエラー:", error);
       }
     };
 
-    // ページ読み込み時にマイク許可状態をチェック
-    checkExistingMicrophonePermission();
-
-    document.addEventListener("click", handleUserInteraction);
-    document.addEventListener("keydown", handleUserInteraction);
-    document.addEventListener("touchstart", handleUserInteraction);
+    // 初回チェック
+    checkMicPermission();
+    
+    // 定期的にチェック（30秒間隔）
+    const micCheckInterval = setInterval(checkMicPermission, 30000);
 
     return () => {
       document.removeEventListener("click", handleUserInteraction);
       document.removeEventListener("keydown", handleUserInteraction);
       document.removeEventListener("touchstart", handleUserInteraction);
+      clearInterval(micCheckInterval);
     };
-  }, []);
+  }, [supportsTTS]);
+
+  // マイク許可ポップアップの処理
+  const handleMicPermissionRequest = async () => {
+    try {
+      const result = await requestMicrophonePermission();
+      
+      if (result.success && result.stream) {
+        setShowMicPopup(false);
+        // 音声認識を開始
+        recognitionRef.current?.start();
+        setIsRecording(true);
+        console.log("マイク許可が得られました。音声認識を開始します。");
+      } else {
+        alert(result.error || "マイクの許可が必要です");
+      }
+    } catch (error) {
+      console.error("マイク許可リクエスト失敗:", error);
+      alert("マイクの許可が必要です");
+    }
+  };
+
+  const handleCloseMicPopup = () => {
+    setShowMicPopup(false);
+    setMicPopupShown(true); // 閉じた時も表示済みとして記録
+  };
 
   // 常時リッスン開始（ユーザーインタラクション後）
   useEffect(() => {
@@ -381,22 +457,25 @@ function ChatPage() {
 
       // マイクの許可を求めてから音声認識を開始
       const startRecognition = async () => {
-        // 共通のマイク許可処理を使用
-        const result = await requestMicrophonePermission({
-          stopAfterPermission: true,
-          errorMessage: "音声認識を使用するにはマイクの許可が必要です。"
-        });
+        // 新しいシンプルなマイク許可処理を使用
+        const result = await requestMicrophonePermission();
 
-        if (result.success) {
+        if (result.success && result.stream) {
           // 音声認識を開始
           recognitionRef.current?.start();
           setIsRecording(true);
           console.log("音声認識を開始しました");
+          
+          // 自動挨拶を無効化 - 音声認識開始時の挨拶送信を停止
+          // if (messages.length === 0) {
+          //   setTimeout(() => {
+          //     const greetingMessage = "こんにちは！話しかけてみてください。";
+          //     handleAutoSubmit(greetingMessage);
+          //   }, 2000); // 2秒後に挨拶
+          // }
         } else {
-          // エラーの種類に応じたメッセージを表示
-          const errorType = getMicrophoneErrorType(new Error(result.error));
-          const errorMessage = getMicrophoneErrorMessage(errorType);
-          alert(errorMessage);
+          // エラーメッセージを表示
+          alert(result.error || "マイクの許可が必要です");
           setHasUserInteracted(false); // 再インタラクションを促す
         }
       };
@@ -405,7 +484,7 @@ function ChatPage() {
       const delay = hasUserInteracted ? 100 : 500;
       setTimeout(startRecognition, delay);
     }
-  }, [supportsSpeech, isContinuousListening, hasUserInteracted]);
+  }, [supportsSpeech, isContinuousListening, hasUserInteracted, messages.length]);
 
   // ====== TTS 初期化（あなたの既存） ======
   useEffect(() => {
@@ -903,9 +982,9 @@ function ChatPage() {
   };
 
   return (
-    <div className="w-full h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="w-full h-screen flex flex-col">
       {/* 3Dキャラクター表示エリア（メイン） */}
-      <div className="flex-1 relative">
+      <div className="h-screen relative">
         <Canvas camera={{ position: [0, 0, 3.5], fov: 40 }}>
           <ambientLight intensity={0.5} />
           <directionalLight position={[5, 5, 5]} intensity={1} />
@@ -918,51 +997,107 @@ function ChatPage() {
       </div>
 
       {/* メッセージ入力欄（小さく、中央寄せ） */}
-      <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur">
-        <form
-          ref={formRef} // ← ★ 追加：自動submit用
-          onSubmit={handleSubmit}
-          className="max-w-30 mx-auto flex items-center gap-2"
-        >
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onFocus={handleInputFocus}
-            onBlur={handleInputBlur}
-            onCompositionStart={() => {
-              isComposingRef.current = true;
-            }} // ← ★ IME開始
-            onCompositionEnd={(e) => {
-              isComposingRef.current = false;
-              setInput(e.currentTarget.value);
-            }} // ← ★ IME確定
-            placeholder={
-              isContinuousListening
-                ? "話しかけてみて"
-                : "メッセージを入力..."
-            }
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-3xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm text-center"
-            disabled={isLoading}
-          />
-          {/* 手動入力時のみ送信ボタンを表示（自動送信でも視覚的フィードバック用に残す） */}
-          {input.trim() && (
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-sm"
+        <div className="absolute bottom-0 left-0 right-0 px-3 py-2">
+          <div className={`mx-auto relative transition-all duration-300 ${isExpanded ? 'max-w-lg' : 'max-w-40'}`}>
+            <form
+              ref={formRef} // ← ★ 追加：自動submit用
+              onSubmit={handleSubmit}
+              className="relative"
             >
-              {isLoading ? "応答中..." : "送信"}
-            </button>
-          )}
-        </form>
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onFocus={() => {
+                  handleInputFocus();
+                  setIsExpanded(true);
+                }}
+                onBlur={() => {
+                  handleInputBlur();
+                  if (!input.trim()) {
+                    setIsExpanded(false);
+                  }
+                }}
+                onCompositionStart={() => {
+                  isComposingRef.current = true;
+                }} // ← ★ IME開始
+                onCompositionEnd={(e) => {
+                  isComposingRef.current = false;
+                  setInput(e.currentTarget.value);
+                }} // ← ★ IME確定
+                placeholder={
+                  isExpanded
+                    ? ""
+                    : isContinuousListening
+                    ? "話しかけてみて"
+                    : "メッセージを入力..."
+                }
+                className={`w-full px-4 py-3 border border-gray-300/30 dark:border-gray-600/30 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white/20 dark:bg-gray-800/20 backdrop-blur-md text-gray-900 dark:text-white text-sm transition-all duration-300 ${isExpanded ? 'pr-12 text-left' : 'text-center'}`}
+                disabled={isLoading}
+              />
+              {isExpanded && (
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 w-10 h-10 bg-white/20 dark:bg-gray-800/20 backdrop-blur-md text-gray-900 dark:text-white rounded-full hover:bg-white/30 dark:hover:bg-gray-800/30 disabled:bg-gray-400/80 disabled:cursor-not-allowed transition-colors font-semibold text-lg flex items-center justify-center"
+                >
+                  {isLoading ? "応答中..." : "↑"}
+                </button>
+              )}
+            </form>
+            {!isExpanded && (
+              <button
+                type="submit"
+                disabled={isLoading}
+                onClick={handleSubmit}
+                className="absolute right-0 top-1/2 transform -translate-y-1/2 w-10 h-10 bg-white text-black rounded-full hover:bg-gray-100 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold text-lg flex items-center justify-center opacity-0 pointer-events-none"
+              >
+                {isLoading ? "応答中..." : "↑"}
+              </button>
+            )}
+          </div>
 
         {hasUserInteracted && !isContinuousListening && (
-          <div className="text-center text-xs text-gray-500 dark:text-gray-400 mt-2">
+          <div className="text-center text-xs text-gray-500 dark:text-gray-400 mt-1">
             🎤 音声認識を開始中...
           </div>
         )}
       </div>
+
+      {/* マイク許可ポップアップ */}
+      {showMicPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-sm text-center">
+            <div className="text-5xl mb-3">🎤</div>
+
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+              マイクをオンにしてください
+            </h2>
+
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed">
+              音声で会話するにはマイクの使用許可が必要です。
+              <br />
+              「マイクを許可する」を押すと、ブラウザが許可ダイアログを表示します。
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleMicPermissionRequest}
+                className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700"
+              >
+                マイクを許可する
+              </button>
+
+              <button
+                onClick={handleCloseMicPopup}
+                className="w-full text-gray-500 dark:text-gray-400 text-xs underline"
+              >
+                後で設定する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

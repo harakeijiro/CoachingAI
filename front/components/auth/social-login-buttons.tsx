@@ -75,7 +75,7 @@ export default function SocialLoginButtons({
   };
 
   return (
-    <div className="space-y-3 max-w-80 mx-auto mb-6">
+    <div className="space-y-3 max-w-64 mx-auto mb-6">
       {/* Google */}
       <button
         type="button"

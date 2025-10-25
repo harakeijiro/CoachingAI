@@ -8,16 +8,9 @@ export default function AuthCallback() {
   const router = useRouter();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  console.log("🔍 AuthCallback: Component mounted");
-
   useEffect(() => {
-    console.log("🔍 AuthCallback: useEffect started");
-    console.log("🔍 AuthCallback: Current URL:", window.location.href);
-    console.log("🔍 AuthCallback: Search params:", window.location.search);
-    
     const handleAuthCallback = async () => {
       try {
-        console.log("🔍 AuthCallback: handleAuthCallback started");
         
         const supabase = createBrowserClient(
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,71 +32,33 @@ export default function AuthCallback() {
           }
         );
 
-        console.log("🔍 AuthCallback: Supabase client created");
-        console.log("🔍 AuthCallback: Environment check:", {
-          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
-          hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        });
-
         // URLから認証コードを取得
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get("code");
         const error = urlParams.get("error");
 
-        console.log("🔍 AuthCallback: URL params", { 
-          code: !!code, 
-          error,
-          fullUrl: window.location.href,
-          redirectTo: "http://localhost:3000/decision",
-          timestamp: new Date().toISOString(),
-          allParams: Object.fromEntries(urlParams.entries()),
-          searchString: window.location.search,
-          hashString: window.location.hash
-        });
-
         if (error) {
-          console.error("🔍 AuthCallback: Error in URL", error);
           setErrorMessage("認証エラーが発生しました。もう一度登録してください。");
           return;
         }
 
         if (!code) {
-          console.error("🔍 AuthCallback: No code found");
           setErrorMessage("認証コードが見つかりません。もう一度登録してください。");
           return;
         }
 
-        console.log("🔍 AuthCallback: Code found, processing...");
-
         // PKCEエラーを完全に無視して、認証成功時のみテーマ画面にリダイレクト
         try {
-          console.log("🔍 AuthCallback: Checking current session...");
           // まず現在のセッションを確認
           const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
           
-          console.log("🔍 AuthCallback: Session check result", { 
-            hasSession: !!sessionData.session, 
-            hasUser: !!sessionData.session?.user,
-            sessionError: sessionError?.message 
-          });
-          
           if (sessionData.session && sessionData.session.user) {
-            console.log("🔍 AuthCallback: Session found, redirecting to decision");
             window.location.replace("/decision");
             return;
           }
 
-          console.log("🔍 AuthCallback: No session found, trying to exchange code...");
-          console.log("🔍 AuthCallback: Code to exchange:", code);
           // セッションがない場合は、認証コードを処理
           const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-
-          console.log("🔍 AuthCallback: Exchange result", { 
-            hasData: !!data, 
-            hasUser: !!data?.user, 
-            hasSession: !!data?.session,
-            error: error?.message 
-          });
 
           if (error) {
             // 期限切れや無効なコードのエラーをチェック
@@ -149,11 +104,9 @@ export default function AuthCallback() {
           }
         } catch (authError) {
           // エラーが発生した場合
-          console.log("Auth error caught:", authError);
           setErrorMessage("認証処理中にエラーが発生しました。もう一度登録してください。");
         }
       } catch (err) {
-        console.error("予期しないエラー:", err);
         setErrorMessage("予期しないエラーが発生しました。もう一度登録してください。");
       }
     };

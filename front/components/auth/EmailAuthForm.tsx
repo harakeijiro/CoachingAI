@@ -108,7 +108,7 @@ export default function EmailAuthForm({
         onError?.(error.message);
       } else {
         console.log("SignUp success, email sent to:", email);
-        onSuccess?.("確認メールを送信しました。メール内の\nリンクをクリックしてください。");
+        onSuccess?.("確認メールを送信しました");
         // フォームをリセット
         setEmail("");
         setPassword("");
@@ -124,7 +124,7 @@ export default function EmailAuthForm({
   };
 
   return (
-    <div className="space-y-4 max-w-sm mx-auto">
+    <div className="space-y-4 max-w-64 mx-auto">
       {/* 区切り線と「または」 */}
       <div className="relative">
         <div className="absolute inset-0 flex items-center">

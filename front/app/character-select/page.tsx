@@ -3,127 +3,167 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import AuthGuard from "@/components/auth/auth-guard";
-import { requestMicrophonePermission, getMicrophoneErrorType, getMicrophoneErrorMessage } from "@/lib/utils/microphone-permission";
+import { requestMicrophonePermission, checkMicrophonePermissionState } from "@/lib/utils/microphone-permission";
 
 export default function CharacterSelectPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const theme = searchParams.get("theme");
-  
-  // マイク許可モーダルの状態管理
+  const theme = searchParams.get("theme") || "mental";
+
+  // UI状態
   const [showMicModal, setShowMicModal] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState<string>("");
   const [isRequestingMic, setIsRequestingMic] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
 
-  const handleCharacterSelect = async (characterName: string) => {
-    // 選択されたキャラクターを保存
-    setSelectedCharacter(characterName);
-    
-    // マイク許可モーダルを表示
-    setShowMicModal(true);
+  // キャラが選ばれたら権限状態をチェックして適切な処理を行う
+  const handleCharacterSelect = async (charName: string) => {
+    // 現在の権限だけ見る（マイクを実際に起動しない）
+    let micState: "granted" | "denied" | "prompt" = "prompt";
+
+    try {
+      micState = await checkMicrophonePermissionState();
+    } catch {
+      // SafariなどPermissions APIがない場合は "prompt" 扱いで落とす
+      micState = "prompt";
+    }
+
+    if (micState === "granted") {
+      // すでに許可済み → モーダル出さないで即遷移
+      localStorage.setItem(
+        "coaching_ai_selected_character_id",
+        generateCharacterId(theme, charName)
+      );
+      localStorage.setItem("coaching_ai_default_theme", theme);
+      router.push("/chat");
+      return;
+    }
+
+    if (micState === "prompt") {
+      // まだ聞いてない人 → そのタップの中で直接getUserMedia()を呼ぶ
+      try {
+        // ★ここでブラウザの許可ダイアログが即出る
+        const result = await requestMicrophonePermission();
+        
+        if (result.success && result.stream) {
+          // 許可成功したらそのまま遷移
+          localStorage.setItem(
+            "coaching_ai_selected_character_id",
+            generateCharacterId(theme, charName)
+          );
+          localStorage.setItem("coaching_ai_default_theme", theme);
+          router.push("/chat");
+          return;
+        } else {
+          // 許可失敗した場合
+          setSelectedCharacter(charName);
+          setShowMicModal(true);
+          setMicError(result.error || "マイクの許可が必要です");
+          return;
+        }
+      } catch (err: unknown) {
+        console.error("マイク許可リクエスト失敗:", err);
+        // エラーが発生した場合はモーダルを表示
+        setSelectedCharacter(charName);
+        setShowMicModal(true);
+        setMicError("マイクの許可が必要です");
+        return;
+      }
+    }
+
+    if (micState === "denied") {
+      // 完全拒否されてる人 → キャラクター情報を保存してチャット画面に遷移
+      localStorage.setItem(
+        "coaching_ai_selected_character_id",
+        generateCharacterId(theme, charName)
+      );
+      localStorage.setItem("coaching_ai_default_theme", theme);
+      
+      // 注意メッセージを表示してから遷移
+      alert(
+        "マイクがブラウザ側でブロックされています。\n" +
+          "テキストでの会話は可能ですが、音声機能は使用できません。\n" +
+          "音声機能を使用したい場合は、アドレスバーから「マイクを許可」に変更して、ページを更新してください。"
+      );
+      
+      router.push("/chat");
+      return;
+    }
   };
 
-  const handleMicPermissionRequest = async () => {
+  // 実際にマイク許可を取りに行く（←このクリックでブラウザに許可ポップアップが出る）
+  const handleAllowMicClick = async () => {
     setIsRequestingMic(true);
     setMicError(null);
 
-    // 共通のマイク許可処理を使用
-    const result = await requestMicrophonePermission({
-      stopAfterPermission: true,
-      errorMessage: "マイクの許可が必要です。"
-    });
-
-    if (result.success) {
-      // キャラクターIDを生成（汎用化）
-      const characterId = generateCharacterId(theme, selectedCharacter);
-      
-      // ローカルストレージに保存
-      localStorage.setItem("coaching_ai_selected_character_id", characterId);
-      localStorage.setItem("coaching_ai_default_theme", theme || "mental");
-      
-      // モーダルを閉じてチャット画面に遷移
-      setShowMicModal(false);
-      router.push("/chat");
-    } else {
-      // エラーの種類に応じたメッセージを設定
-      const errorType = getMicrophoneErrorType(new Error(result.error));
-      const errorMessage = getMicrophoneErrorMessage(errorType);
-      setMicError(errorMessage);
-    }
+    const result = await requestMicrophonePermission();
 
     setIsRequestingMic(false);
-  };
 
-  // キャラクターID生成の汎用化
-  const generateCharacterId = (theme: string | null, characterName: string): string => {
-    // テーマとキャラクター名に基づいてIDを生成
-    const themeCharacterMap: Record<string, Record<string, string>> = {
-      mental: {
-        "coach-1": "dog-character",
-        "coach-2": "mental-cat-character", // 将来の拡張
-        "coach-3": "mental-owl-character"  // 将来の拡張
-      },
-      love: {
-        "coach-1": "cat-character",
-        "coach-2": "love-mike-character",  // 将来の拡張
-        "coach-3": "love-dog-character"    // 将来の拡張
-      },
-      career: {
-        "coach-1": "owl-character",
-        "coach-2": "career-kent-character", // 将来の拡張
-        "coach-3": "career-human-character"  // 将来の拡張
-      }
-    };
+    if (result.success && result.stream) {
+      // 好きな形で保存する：
+      // 1. ローカルストレージにキャラ情報
+      localStorage.setItem(
+        "coaching_ai_selected_character_id",
+        generateCharacterId(theme, selectedCharacter)
+      );
+      localStorage.setItem("coaching_ai_default_theme", theme);
 
-    return themeCharacterMap[theme || "mental"]?.[characterName] || `dummy-${characterName}`;
-  };
+      // 2. マイクのstreamをグローバルに保持したいならZustand/Contextに入れる想定
+      //    ここでは説明だけ。実装例は後述します。
+      // micStore.setState({ stream: result.stream });
 
-  const handleMicPermissionDenied = () => {
-    // モーダルを閉じる（キャラクター選択画面に戻る）
-    setShowMicModal(false);
-    setMicError(null);
-  };
+      // モーダル閉じる & /chat へ移動
+      setShowMicModal(false);
+      router.push("/chat");
 
-  const handleContinueWithoutMic = () => {
-    // キャラクターIDを生成
-    let characterId = `dummy-${selectedCharacter}`;
-    
-    if (theme === "mental" && selectedCharacter === "coach-1") {
-      characterId = "dog-character";
-    } else if (theme === "love" && selectedCharacter === "coach-1") {
-      characterId = "cat-character";
-    } else if (theme === "career" && selectedCharacter === "coach-1") {
-      characterId = "owl-character";
+      return;
     }
-    
-    // ローカルストレージに保存
-    localStorage.setItem("coaching_ai_selected_character_id", characterId);
-    localStorage.setItem("coaching_ai_default_theme", theme || "mental");
-    
-    // モーダルを閉じてチャット画面に遷移
+
+    // 失敗した場合
+    if (!result.success && result.error) {
+      setMicError(result.error);
+    }
+  };
+
+  // マイクなしで続ける
+  const handleContinueWithoutMic = () => {
+    localStorage.setItem(
+      "coaching_ai_selected_character_id",
+      generateCharacterId(theme, selectedCharacter)
+    );
+    localStorage.setItem("coaching_ai_default_theme", theme);
+
     setShowMicModal(false);
     router.push("/chat");
   };
 
+  const generateCharacterId = (theme: string, charName: string) => {
+    // ここはあなたのロジックをそのままシンプル化
+    if (theme === "mental" && charName === "coach-1") return "dog-character";
+    if (theme === "love" && charName === "coach-1") return "cat-character";
+    if (theme === "career" && charName === "coach-1") return "owl-character";
+    return `dummy-${charName}`;
+  };
+
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-indigo-900 dark:to-purple-900">
-        <div className="container mx-auto px-4 pt-48 pb-8">
-           {/* ヘッダー - タイトルのみ中央揃え */}
-           <div className="text-center mb-8">
-              <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 animate-[fadeInUp_2s_ease-out_forwards] drop-shadow-lg">
-               {theme === "mental" ? "あなたのパートナーを選びましょう" :
-                theme === "love" ? "一緒に歩むパートナーを選びましょう" :
-                theme === "career" ? "一緒に目標へ進む相棒を見つけましょう" :
-                "あなたのAIコーチを選びましょう"}
-             </h1>
-           </div>
+      <div className="min-h-[100svh] flex items-center justify-center bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-indigo-900 dark:to-purple-900">
+        <div className="container mx-auto px-4 py-8">
+          {/* タイトル */}
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 animate-[fadeInUp_2s_ease-out_forwards] drop-shadow-lg">
+              {theme === "mental" ? "あなたのパートナーを選びましょう" :
+               theme === "love" ? "一緒に歩むパートナーを選びましょう" :
+               theme === "career" ? "一緒に目標へ進む相棒を見つけましょう" :
+               "あなたのAIコーチを選びましょう"}
+            </h1>
+          </div>
 
-          {/* キャラクター選択 */}
+          {/* キャラ一覧 */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {[1, 2, 3].map((i) => (
-              <div
+              <button
                 key={i}
                 className="cursor-pointer bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-all duration-200"
                 onClick={() => handleCharacterSelect(`coach-${i}`)}
@@ -158,11 +198,11 @@ export default function CharacterSelectPage() {
                      "AIコーチ"}
                   </p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
 
-          {/* テーマ表示とテーマ変更ボタン - カードの下に配置 */}
+          {/* テーマ表示とテーマ変更ボタン */}
           <div className="flex items-center justify-end space-x-2">
             <span className="bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 px-3 py-1 rounded-full text-sm font-medium">
               {theme === "mental" ? "メンタル・自己理解" : 
@@ -176,116 +216,52 @@ export default function CharacterSelectPage() {
               テーマを変更
             </button>
           </div>
-
         </div>
-        
+
         {/* マイク許可モーダル */}
         {showMicModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
-              <div className="text-center">
-                {/* マイクアイコン */}
-                <div className="text-6xl mb-4">🎤</div>
-                
-                {/* タイトル */}
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                  マイクの許可が必要です
-                </h2>
-                
-                
-                {/* HTTPS警告 */}
-                {window.location.protocol !== 'https:' && (
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 mb-4">
-                    <div className="flex items-start">
-                      <div className="text-yellow-500 mr-2">⚠️</div>
-                      <div>
-                        <p className="text-yellow-600 dark:text-yellow-400 text-sm font-medium mb-1">
-                          HTTPS接続が必要です
-                        </p>
-                        <p className="text-yellow-600 dark:text-yellow-400 text-xs">
-                          マイクの使用にはHTTPS接続が必要です。現在はHTTP接続のため、マイクが使用できません。
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* トラブルシューティングガイド */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
-                  <div className="flex items-start">
-                    <div className="text-blue-500 mr-2">💡</div>
-                    <div>
-                      <p className="text-blue-600 dark:text-blue-400 text-sm font-medium mb-2">
-                        マイクの許可を有効にする方法
-                      </p>
-                      <div className="text-blue-600 dark:text-blue-400 text-xs space-y-1">
-                        <p><strong>Chrome:</strong> アドレスバー左の🔒 → サイトの設定 → マイクを許可</p>
-                        <p><strong>Safari:</strong> Safari → 環境設定 → ウェブサイト → マイクを許可</p>
-                        <p><strong>Firefox:</strong> アドレスバー左の🔒 → 権限 → マイクを許可</p>
-                        <p><strong>システム:</strong> macOS/Windowsのプライバシー設定でマイクを許可</p>
-                      </div>
-                    </div>
-                  </div>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 w-full max-w-sm text-center">
+              <div className="text-5xl mb-3">🎤</div>
+
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                マイクの許可をお願いします
+              </h2>
+
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 leading-relaxed whitespace-pre-line">
+                会話でやりとりするにはマイクの使用許可が必要です。
+                {"\n"}
+                「マイクを許可する」を押すと、ブラウザが許可ダイアログを表示します。
+              </p>
+
+              {micError && (
+                <div className="text-left text-red-600 dark:text-red-400 text-xs bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 mb-4 whitespace-pre-line">
+                  {micError}
                 </div>
-                
-                {/* エラーメッセージ */}
-                {micError && (
-                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
-                    <div className="flex items-start">
-                      <div className="text-red-500 mr-2">⚠️</div>
-                      <div>
-                        <p className="text-red-600 dark:text-red-400 text-sm font-medium mb-2">
-                          現在マイクの許可の実装中です
-                        </p>
-                        <p className="text-red-600 dark:text-red-400 text-sm">
-                          マイクの許可を有効にする方法をご覧ください
-                        </p>
-                        <div className="mt-3">
-                          <button
-                            onClick={handleMicPermissionRequest}
-                            disabled={isRequestingMic}
-                            className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 text-sm font-medium underline"
-                          >
-                            {isRequestingMic ? "確認中..." : "再試行"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* ボタン */}
-                <div className="space-y-3">
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <button
-                      onClick={handleMicPermissionRequest}
-                      disabled={isRequestingMic}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium py-3 px-6 rounded-lg transition-colors"
-                    >
-                      {isRequestingMic ? "許可を確認中..." : "マイクを許可する"}
-                    </button>
-                    
-                    <button
-                      onClick={handleMicPermissionDenied}
-                      disabled={isRequestingMic}
-                      className="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium py-3 px-6 rounded-lg transition-colors"
-                    >
-                      キャンセル
-                    </button>
-                  </div>
-                  
-                  {/* 代替手段 */}
-                  <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
-                    <button
-                      onClick={handleContinueWithoutMic}
-                      disabled={isRequestingMic}
-                      className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm"
-                    >
-                      テキストのみで続行する
-                    </button>
-                  </div>
-                </div>
-                
+              )}
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={handleAllowMicClick}
+                  disabled={isRequestingMic}
+                  className="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+                >
+                  {isRequestingMic ? "許可を確認中..." : "マイクを許可する"}
+                </button>
+
+                <button
+                  onClick={handleContinueWithoutMic}
+                  className="w-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium py-2 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 text-sm"
+                >
+                  マイクなしで続ける
+                </button>
+
+                <button
+                  onClick={() => setShowMicModal(false)}
+                  className="w-full text-gray-500 dark:text-gray-400 text-xs underline"
+                >
+                  戻る
+                </button>
               </div>
             </div>
           </div>
