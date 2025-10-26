@@ -180,20 +180,32 @@ function ChatPage() {
 
   const handleSpeechResult = useCallback(
     (interim: string, finalText: string) => {
-      console.log("[handleSpeechResult] 呼び出し", { interim, finalText });
+      console.log("[handleSpeechResult] 呼び出し", { 
+        interim, 
+        finalText, 
+        isManualInput: isManualInputRef.current,
+        voiceInput: voiceInput,
+        lastSentVoiceText: lastSentVoiceTextRef.current
+      });
 
-      if (isManualInputRef.current) return;
+      if (isManualInputRef.current) {
+        console.log("[handleSpeechResult] 手動入力中なのでスキップ");
+        return;
+      }
 
       // 音声認識結果を専用の状態（voiceInput）に設定
       setVoiceInput(prev => {
         const base = prev.replace(/（話し中….*）$/u, "");
-        return finalText ? finalText : base;
+        const newValue = finalText ? finalText : base;
+        console.log("[handleSpeechResult] voiceInput更新:", { prev, newValue });
+        return newValue;
       });
 
       // バッファ更新（final > interim）
       const latestText = (finalText || interim || "").trim();
       if (latestText) {
         speechBufferRef.current = latestText;
+        console.log("[handleSpeechResult] speechBuffer更新:", latestText);
       }
 
       // サイレンスタイマーを張り直し
@@ -207,6 +219,7 @@ function ChatPage() {
         console.log("[silence timeout] チェック", {
           textToSend,
           isContinuousListening,
+          lastSentVoiceText: lastSentVoiceTextRef.current,
         });
 
         if (textToSend && isContinuousListening) {
@@ -228,7 +241,7 @@ function ChatPage() {
         }
       }, SILENCE_DELAY_MS);
     },
-    [isContinuousListening, sendMessage]
+    [isContinuousListening, sendMessage, voiceInput]
   );
 
   // ★このuseEffectで、最新のhandleSpeechResultをonResultRefに反映する
@@ -432,14 +445,22 @@ function ChatPage() {
 
   // ====== 手動入力時の制御（既存＋IMEフラグ） ======
   const handleInputFocus = () => {
+    console.log("[handleInputFocus] テキスト入力開始");
     isManualInputRef.current = true;
     stopRecognition();
   };
   const handleInputBlur = () => {
+    console.log("[handleInputBlur] テキスト入力終了");
     // 少し遅延を入れてから手動入力フラグをリセット
     setTimeout(() => {
+      console.log("[handleInputBlur] 音声認識再開チェック", {
+        isManualInput: isManualInputRef.current,
+        isContinuousListening,
+        isVoiceEnabled
+      });
       isManualInputRef.current = false;
       if (isContinuousListening && isVoiceEnabled) {
+        console.log("[handleInputBlur] 音声認識再開");
         restartRecognition(500, "after manual input blur");
       }
     }, 100);
@@ -475,13 +496,20 @@ function ChatPage() {
   // ====== メッセージ送信（手動ボタン/自動requestSubmit 共通） ======
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[handleSubmit] テキスト送信開始");
     await sendMessage(input, false);
     setInput("");
     
     // テキスト送信後に音声認識を再開
     setTimeout(() => {
+      console.log("[handleSubmit] 音声認識再開チェック", {
+        isManualInput: isManualInputRef.current,
+        isContinuousListening,
+        isVoiceEnabled
+      });
       isManualInputRef.current = false;
       if (isContinuousListening && isVoiceEnabled) {
+        console.log("[handleSubmit] 音声認識再開");
         restartRecognition(500, "after text submit");
       }
     }, 200);
