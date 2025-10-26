@@ -89,6 +89,10 @@ export const useSpeechRecognition = ({
     
     setTimeout(() => {
       try {
+        if (recognitionRef.current && isRecording) {
+          console.log(`Recognition already started, skipping restart${context ? ` (${context})` : ""}`);
+          return;
+        }
         recognitionRef.current?.start();
         setIsRecording(true);
         console.log(`Recognition restarted${context ? ` (${context})` : ""}`);
@@ -184,8 +188,13 @@ export const useSpeechRecognition = ({
 
   const startRecognition = () => {
     try {
+      if (recognitionRef.current && isRecording) {
+        console.log("Recognition already started, skipping");
+        return;
+      }
       recognitionRef.current?.start();
       setIsRecording(true);
+      console.log("Recognition started successfully");
     } catch (e) {
       console.log("Recognition start failed:", e);
     }

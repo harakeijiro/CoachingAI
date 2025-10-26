@@ -196,8 +196,8 @@ function ChatPage() {
       // 音声認識結果を専用の状態（voiceInput）に設定
       setVoiceInput(prev => {
         const base = prev.replace(/（話し中….*）$/u, "");
-        const newValue = finalText ? finalText : base;
-        console.log("[handleSpeechResult] voiceInput更新:", { prev, newValue });
+        const newValue = finalText ? finalText : (interim ? interim : base);
+        console.log("[handleSpeechResult] voiceInput更新:", { prev, finalText, interim, newValue });
         return newValue;
       });
 
