@@ -20,6 +20,7 @@ function ChatPage() {
 
   // 1. stateやref類
   const [input, setInput] = useState("");
+  const [voiceInput, setVoiceInput] = useState(""); // 音声認識専用の状態
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
   const [isContinuousListening, setIsContinuousListening] = useState(false);
   const isManualInputRef = useRef<boolean>(false);
@@ -540,6 +541,8 @@ function ChatPage() {
         onInputFocus={handleInputFocus}
         onInputBlur={handleInputBlur}
         onMicButtonClick={handleMicButtonClick}
+        voiceInput={voiceInput}
+        setVoiceInput={setVoiceInput}
       />
 
       {/* マイク許可ポップアップ */}

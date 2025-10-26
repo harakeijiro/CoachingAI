@@ -13,6 +13,9 @@ interface ChatInputProps {
   onInputFocus: () => void;
   onInputBlur: () => void;
   onMicButtonClick: () => void;
+  // 音声認識専用の状態
+  voiceInput: string;
+  setVoiceInput: (value: string) => void;
 }
 
 export const ChatInput = ({
@@ -26,6 +29,8 @@ export const ChatInput = ({
   onInputFocus,
   onInputBlur,
   onMicButtonClick,
+  voiceInput,
+  setVoiceInput,
 }: ChatInputProps) => {
   const formRef = useRef<HTMLFormElement | null>(null);
   const isComposingRef = useRef(false);
