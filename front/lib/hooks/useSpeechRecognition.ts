@@ -96,6 +96,12 @@ export const useSpeechRecognition = ({
       recognition.continuous = true;
 
       recognition.onresult = (event: ISpeechRecognitionEvent) => {
+        // isVoiceEnabled が false の場合は結果を無視
+        if (!isVoiceEnabled) {
+          console.log("音声認識結果を無視（isVoiceEnabled: false）");
+          return;
+        }
+
         let interim = "";
         let finalText = "";
         for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -109,6 +115,7 @@ export const useSpeechRecognition = ({
           finalText,
           isContinuousListening,
           isManualInput,
+          isVoiceEnabled,
         });
 
         onResult(interim, finalText);
@@ -116,14 +123,22 @@ export const useSpeechRecognition = ({
 
       recognition.onend = () => {
         setIsRecording(false);
-        restartRecognition(100, "onend");
+        // isVoiceEnabled が true の場合のみ再開
+        if (isVoiceEnabled) {
+          restartRecognition(100, "onend");
+        } else {
+          console.log("音声認識停止（isVoiceEnabled: false）");
+        }
       };
 
       recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
         console.log("Recognition error:", event.error);
         setIsRecording(false);
         onError(event.error);
-        restartRecognition(1000, "onerror");
+        // isVoiceEnabled が true の場合のみ再開
+        if (isVoiceEnabled) {
+          restartRecognition(1000, "onerror");
+        }
       };
 
       recognitionRef.current = recognition;
@@ -135,6 +150,19 @@ export const useSpeechRecognition = ({
       } catch {}
     };
   }, [isContinuousListening, isManualInput, isVoiceEnabled, onResult, onError]);
+
+  // isVoiceEnabled が false になった時に音声認識を停止
+  useEffect(() => {
+    if (!isVoiceEnabled && recognitionRef.current) {
+      console.log("isVoiceEnabled が false になったため音声認識を停止");
+      try {
+        recognitionRef.current.stop();
+        setIsRecording(false);
+      } catch (e) {
+        console.log("音声認識停止に失敗:", e);
+      }
+    }
+  }, [isVoiceEnabled]);
 
   const startRecognition = () => {
     try {
