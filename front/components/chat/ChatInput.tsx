@@ -68,7 +68,7 @@ export const ChatInput = ({
               className={`w-12 h-12 rounded-full backdrop-blur-md transition-all duration-200 flex items-center justify-center shadow-xl border border-gray-300/30 dark:border-gray-600/30 ${
                 isVoiceEnabled 
                   ? 'bg-white/20 dark:bg-gray-800/20 text-gray-900 dark:text-white hover:bg-white/30 dark:hover:bg-gray-800/30' 
-                  : 'bg-gray-500/20 dark:bg-gray-500/20 text-gray-600 dark:text-gray-400 hover:bg-gray-500/30 dark:hover:bg-gray-500/30'
+                  : 'bg-red-400/30 dark:bg-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-400/40 dark:hover:bg-red-500/40'
               }`}
               title={isVoiceEnabled ? "音声入力を無効にする" : "音声入力を有効にする"}
               disabled={!supportsSpeech}
