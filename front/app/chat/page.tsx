@@ -183,8 +183,8 @@ function ChatPage() {
 
       if (isManualInputRef.current) return;
 
-      // UIのインプット欄に音声認識結果を表示
-      setInput(prev => {
+      // 音声認識結果を専用の状態（voiceInput）に設定
+      setVoiceInput(prev => {
         const base = prev.replace(/（話し中….*）$/u, "");
         return finalText ? finalText : base;
       });
@@ -212,7 +212,7 @@ function ChatPage() {
           console.log("[silence timeout] sendMessage 実行:", textToSend);
 
           sendMessage(textToSend, true); // ← ← ← ここでAPIに投げる
-          setInput("");
+          setVoiceInput(""); // 音声認識結果をクリア
           speechBufferRef.current = "";
         } else {
           console.log("[silence timeout] 送信スキップ");
