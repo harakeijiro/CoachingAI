@@ -182,12 +182,10 @@ function ChatPage() {
 
       if (isManualInputRef.current) return;
 
-      // UIのインプット欄に「聞き取れてるよ」を見せる
+      // UIのインプット欄に音声認識結果を表示
       setInput(prev => {
         const base = prev.replace(/（話し中….*）$/u, "");
-        return finalText
-          ? finalText
-          : base + (interim ? `（話し中…${interim}）` : "");
+        return finalText ? finalText : base;
       });
 
       // バッファ更新（final > interim）
