@@ -48,6 +48,12 @@ export const ChatInput = ({
     }
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(e);
+    setIsExpanded(false); // 送信後に入力欄を縮小状態に戻す
+  };
+
   return (
     <>
       {/* 音声認識結果表示エリア（見える部分） */}
@@ -104,7 +110,7 @@ export const ChatInput = ({
           <div className={`relative transition-all duration-300 ${isExpanded ? 'flex-1' : 'w-40'}`}>
             <form
               ref={formRef}
-              onSubmit={onSubmit}
+              onSubmit={handleSubmit}
               className="relative"
             >
               <input
@@ -155,7 +161,7 @@ export const ChatInput = ({
               <button
                 type="submit"
                 disabled={isLoading}
-                onClick={onSubmit}
+                onClick={handleSubmit}
                 className="absolute right-0 top-1/2 transform -translate-y-1/2 w-10 h-10 bg-white text-black rounded-full hover:bg-gray-100 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold text-lg flex items-center justify-center opacity-0 pointer-events-none"
               >
                 {isLoading ? "" : "↑"}
