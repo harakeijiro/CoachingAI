@@ -231,11 +231,12 @@ function ChatPage() {
 
           console.log("[silence timeout] sendMessage 実行:", textToSend);
 
-          sendMessage(textToSend, true); // ← ← ← ここでAPIに投げる
-          // 音声認識結果を即座にクリア
+          // 音声認識結果を即座にクリア（送信と同時に）
           setVoiceInput("");
           speechBufferRef.current = "";
           lastSentVoiceTextRef.current = textToSend; // 送信済みテキストを記録
+          
+          sendMessage(textToSend, true); // ← ← ← ここでAPIに投げる
         } else {
           console.log("[silence timeout] 送信スキップ");
         }
