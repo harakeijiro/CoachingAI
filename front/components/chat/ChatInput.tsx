@@ -56,7 +56,7 @@ export const ChatInput = ({
           <div className="mx-auto max-w-lg">
             <div className="px-4 py-2">
               <div className="text-gray-900 dark:text-white break-words text-center font-bold" style={{
-                textShadow: '1px 1px 2px rgba(0,0,0,0.8), -1px -1px 2px rgba(255,255,255,0.8), 1px -1px 2px rgba(0,0,0,0.8), -1px 1px 2px rgba(0,0,0,0.8)'
+                textShadow: '0.5px 0.5px 1px rgba(0,0,0,0.6), -0.5px -0.5px 1px rgba(255,255,255,0.6), 0.5px -0.5px 1px rgba(0,0,0,0.6), -0.5px 0.5px 1px rgba(0,0,0,0.6)'
               }}>
                 {voiceInput}
               </div>
