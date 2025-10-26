@@ -64,10 +64,28 @@ export const useSpeechRecognition = ({
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [supportsSpeech, setSupportsSpeech] = useState(false);
+  
+  // 最新の値を参照するためのref
+  const isVoiceEnabledRef = useRef(isVoiceEnabled);
+  const isContinuousListeningRef = useRef(isContinuousListening);
+  const isManualInputRef = useRef(isManualInput);
+  
+  // refを更新
+  useEffect(() => {
+    isVoiceEnabledRef.current = isVoiceEnabled;
+  }, [isVoiceEnabled]);
+  
+  useEffect(() => {
+    isContinuousListeningRef.current = isContinuousListening;
+  }, [isContinuousListening]);
+  
+  useEffect(() => {
+    isManualInputRef.current = isManualInput;
+  }, [isManualInput]);
 
   // 音声認識の再開処理
   const restartRecognition = (delay: number = 1000, context: string = "") => {
-    if (!isContinuousListening || isManualInput || !isVoiceEnabled) return;
+    if (!isContinuousListeningRef.current || isManualInputRef.current || !isVoiceEnabledRef.current) return;
     
     setTimeout(() => {
       try {
@@ -80,7 +98,7 @@ export const useSpeechRecognition = ({
     }, delay);
   };
 
-  // Web Speech API 初期化
+  // Web Speech API 初期化（一度だけ実行）
   useEffect(() => {
     const SR =
       (typeof window !== "undefined" &&
@@ -97,7 +115,7 @@ export const useSpeechRecognition = ({
 
       recognition.onresult = (event: ISpeechRecognitionEvent) => {
         // isVoiceEnabled が false の場合は結果を無視
-        if (!isVoiceEnabled) {
+        if (!isVoiceEnabledRef.current) {
           console.log("音声認識結果を無視（isVoiceEnabled: false）");
           return;
         }
@@ -113,9 +131,9 @@ export const useSpeechRecognition = ({
         console.log("音声認識結果:", {
           interim,
           finalText,
-          isContinuousListening,
-          isManualInput,
-          isVoiceEnabled,
+          isContinuousListening: isContinuousListeningRef.current,
+          isManualInput: isManualInputRef.current,
+          isVoiceEnabled: isVoiceEnabledRef.current,
         });
 
         onResult(interim, finalText);
@@ -124,7 +142,7 @@ export const useSpeechRecognition = ({
       recognition.onend = () => {
         setIsRecording(false);
         // isVoiceEnabled が true の場合のみ再開
-        if (isVoiceEnabled) {
+        if (isVoiceEnabledRef.current) {
           restartRecognition(100, "onend");
         } else {
           console.log("音声認識停止（isVoiceEnabled: false）");
@@ -136,7 +154,7 @@ export const useSpeechRecognition = ({
         setIsRecording(false);
         onError(event.error);
         // isVoiceEnabled が true の場合のみ再開
-        if (isVoiceEnabled) {
+        if (isVoiceEnabledRef.current) {
           restartRecognition(1000, "onerror");
         }
       };
@@ -149,7 +167,7 @@ export const useSpeechRecognition = ({
         recognitionRef.current?.stop();
       } catch {}
     };
-  }, [isContinuousListening, isManualInput, isVoiceEnabled, onResult, onError]);
+  }, []); // 依存配列を空にして一度だけ実行
 
   // isVoiceEnabled が false になった時に音声認識を停止
   useEffect(() => {
