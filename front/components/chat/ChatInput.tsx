@@ -50,6 +50,22 @@ export const ChatInput = ({
 
   return (
     <>
+      {/* 音声認識結果表示エリア（見える部分） */}
+      {voiceInput && (
+        <div className="absolute bottom-20 left-0 right-0 px-3">
+          <div className="mx-auto max-w-lg">
+            <div className="px-4 py-2 bg-blue-500/20 dark:bg-blue-400/20 backdrop-blur-md rounded-lg border border-blue-300/30 dark:border-blue-400/30">
+              <div className="text-sm text-blue-700 dark:text-blue-300 font-medium mb-1">
+                音声認識結果:
+              </div>
+              <div className="text-gray-900 dark:text-white break-words">
+                {voiceInput}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* メッセージ入力欄とマイクボタンのコンテナ */}
       <div className="absolute bottom-0 left-0 right-0 px-3 py-2">
         <div className={`mx-auto relative transition-all duration-300 flex items-center justify-center gap-3 ${isExpanded ? 'max-w-lg' : 'max-w-xs'}`}>
@@ -148,20 +164,6 @@ export const ChatInput = ({
             )}
           </div>
         </div>
-
-        {/* 音声認識結果表示エリア（見える部分） */}
-        {voiceInput && (
-          <div className="mx-auto max-w-lg mt-2">
-            <div className="px-4 py-2 bg-blue-500/20 dark:bg-blue-400/20 backdrop-blur-md rounded-lg border border-blue-300/30 dark:border-blue-400/30">
-              <div className="text-sm text-blue-700 dark:text-blue-300 font-medium mb-1">
-                音声認識結果:
-              </div>
-              <div className="text-gray-900 dark:text-white break-words">
-                {voiceInput}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* 音声認識専用の見えない入力欄（入力欄2） */}
         <div className="absolute bottom-0 left-0 right-0 opacity-0 pointer-events-none">
