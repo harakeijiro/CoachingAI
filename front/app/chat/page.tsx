@@ -220,6 +220,7 @@ function ChatPage() {
           textToSend,
           isContinuousListening,
           lastSentVoiceText: lastSentVoiceTextRef.current,
+          currentVoiceInput: voiceInput,
         });
 
         if (textToSend && isContinuousListening) {
@@ -232,9 +233,11 @@ function ChatPage() {
           console.log("[silence timeout] sendMessage 実行:", textToSend);
 
           // 音声認識結果を即座にクリア（送信と同時に）
+          console.log("[silence timeout] voiceInput クリア前:", voiceInput);
           setVoiceInput("");
           speechBufferRef.current = "";
           lastSentVoiceTextRef.current = textToSend; // 送信済みテキストを記録
+          console.log("[silence timeout] voiceInput クリア後");
           
           sendMessage(textToSend, true); // ← ← ← ここでAPIに投げる
         } else {
@@ -249,6 +252,11 @@ function ChatPage() {
   useEffect(() => {
     onResultRef.current = handleSpeechResult;
   }, [handleSpeechResult]);
+
+  // voiceInputの状態変化を監視
+  useEffect(() => {
+    console.log("[voiceInput監視] voiceInput変更:", voiceInput);
+  }, [voiceInput]);
 
   // クリーンアップ処理
   useEffect(() => {
