@@ -193,6 +193,13 @@ function ChatPage() {
         return;
       }
 
+      // 送信済みテキストと同じ場合は表示も更新しない
+      const currentText = finalText || interim;
+      if (currentText && currentText === lastSentVoiceTextRef.current) {
+        console.log("[handleSpeechResult] 送信済みテキストと同じなので表示更新をスキップ:", currentText);
+        return;
+      }
+
       // 音声認識結果を専用の状態（voiceInput）に設定
       setVoiceInput(prev => {
         const base = prev.replace(/（話し中….*）$/u, "");
