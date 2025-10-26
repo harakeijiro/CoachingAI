@@ -439,8 +439,8 @@ function ChatPage() {
     // 少し遅延を入れてから手動入力フラグをリセット
     setTimeout(() => {
       isManualInputRef.current = false;
-      if (!input.trim() && isContinuousListening && isVoiceEnabled) {
-        restartRecognition(500, "after manual input");
+      if (isContinuousListening && isVoiceEnabled) {
+        restartRecognition(500, "after manual input blur");
       }
     }, 100);
   };
@@ -477,6 +477,14 @@ function ChatPage() {
     e.preventDefault();
     await sendMessage(input, false);
     setInput("");
+    
+    // テキスト送信後に音声認識を再開
+    setTimeout(() => {
+      isManualInputRef.current = false;
+      if (isContinuousListening && isVoiceEnabled) {
+        restartRecognition(500, "after text submit");
+      }
+    }, 200);
   };
 
   // キャラクター選択画面に戻る関数
