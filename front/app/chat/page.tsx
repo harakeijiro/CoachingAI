@@ -476,6 +476,12 @@ function ChatPage() {
 
   // マイクボタンのクリック処理（音声認識の有効/無効切り替え）
   const handleMicButtonClick = () => {
+    console.log("[DEBUG] handleMicButtonClick called", {
+      isVoiceEnabled,
+      isContinuousListening,
+      supportsSpeech
+    });
+    
     if (isVoiceEnabled) {
       // 音声認識を無効にする
       stopRecognition();
@@ -487,6 +493,8 @@ function ChatPage() {
         startRecognition();
         setIsVoiceEnabled(true);
         console.log("音声認識を有効にしました");
+      } else {
+        console.log("continuous listening が無効のため、音声認識を有効にできません");
       }
     }
   };
