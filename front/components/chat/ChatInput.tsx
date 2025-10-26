@@ -51,6 +51,7 @@ export const ChatInput = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(e);
+    setInput(""); // 送信後にテキストを即座にクリア
     setIsExpanded(false); // 送信後に入力欄を縮小状態に戻す
   };
 
