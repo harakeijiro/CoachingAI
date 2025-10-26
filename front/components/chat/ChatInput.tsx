@@ -56,15 +56,7 @@ export const ChatInput = ({
           {/* マイクボタン（入力欄の左側） */}
           <div className={`transition-opacity duration-300 ${isExpanded ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
             <button
-              onClick={() => {
-                console.log("[DEBUG] ChatInput mic button clicked", {
-                  isVoiceEnabled,
-                  isContinuousListening,
-                  supportsSpeech,
-                  isExpanded
-                });
-                onMicButtonClick();
-              }}
+              onClick={onMicButtonClick}
               className={`w-12 h-12 rounded-full backdrop-blur-md transition-all duration-200 flex items-center justify-center shadow-xl border border-gray-300/30 dark:border-gray-600/30 ${
                 isVoiceEnabled 
                   ? 'bg-white/20 dark:bg-gray-800/20 text-gray-900 dark:text-white hover:bg-white/30 dark:hover:bg-gray-800/30' 

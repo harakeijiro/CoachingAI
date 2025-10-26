@@ -180,23 +180,13 @@ function ChatPage() {
 
   const handleSpeechResult = useCallback(
     (interim: string, finalText: string) => {
-      console.log("[handleSpeechResult] 呼び出し", { 
-        interim, 
-        finalText, 
-        isManualInput: isManualInputRef.current,
-        voiceInput: voiceInput,
-        lastSentVoiceText: lastSentVoiceTextRef.current
-      });
-
       if (isManualInputRef.current) {
-        console.log("[handleSpeechResult] 手動入力中なのでスキップ");
         return;
       }
 
       // 送信済みテキストと同じ場合は表示も更新しない
       const currentText = finalText || interim;
       if (currentText && currentText === lastSentVoiceTextRef.current) {
-        console.log("[handleSpeechResult] 送信済みテキストと同じなので表示更新をスキップ:", currentText);
         return;
       }
 
@@ -204,7 +194,6 @@ function ChatPage() {
       setVoiceInput(prev => {
         const base = prev.replace(/（話し中….*）$/u, "");
         const newValue = finalText ? finalText : (interim ? interim : base);
-        console.log("[handleSpeechResult] voiceInput更新:", { prev, finalText, interim, newValue });
         return newValue;
       });
 
@@ -212,7 +201,6 @@ function ChatPage() {
       const latestText = (finalText || interim || "").trim();
       if (latestText) {
         speechBufferRef.current = latestText;
-        console.log("[handleSpeechResult] speechBuffer更新:", latestText);
       }
 
       // サイレンスタイマーを張り直し
@@ -223,32 +211,18 @@ function ChatPage() {
       silenceTimeoutRef.current = setTimeout(() => {
         const textToSend = (speechBufferRef.current || "").trim();
 
-        console.log("[silence timeout] チェック", {
-          textToSend,
-          isContinuousListening,
-          lastSentVoiceText: lastSentVoiceTextRef.current,
-          currentVoiceInput: voiceInput,
-        });
-
         if (textToSend && isContinuousListening) {
           // 重複送信を防ぐ
           if (textToSend === lastSentVoiceTextRef.current) {
-            console.log("[silence timeout] 重複送信をスキップ:", textToSend);
             return;
           }
 
-          console.log("[silence timeout] sendMessage 実行:", textToSend);
-
           // 音声認識結果を即座にクリア（送信と同時に）
-          console.log("[silence timeout] voiceInput クリア前:", voiceInput);
           setVoiceInput("");
           speechBufferRef.current = "";
           lastSentVoiceTextRef.current = textToSend; // 送信済みテキストを記録
-          console.log("[silence timeout] voiceInput クリア後");
           
-          sendMessage(textToSend, true); // ← ← ← ここでAPIに投げる
-        } else {
-          console.log("[silence timeout] 送信スキップ");
+          sendMessage(textToSend, true);
         }
       }, SILENCE_DELAY_MS);
     },
@@ -260,10 +234,6 @@ function ChatPage() {
     onResultRef.current = handleSpeechResult;
   }, [handleSpeechResult]);
 
-  // voiceInputの状態変化を監視
-  useEffect(() => {
-    console.log("[voiceInput監視] voiceInput変更:", voiceInput);
-  }, [voiceInput]);
 
   // クリーンアップ処理
   useEffect(() => {
@@ -461,22 +431,14 @@ function ChatPage() {
 
   // ====== 手動入力時の制御（既存＋IMEフラグ） ======
   const handleInputFocus = () => {
-    console.log("[handleInputFocus] テキスト入力開始");
     isManualInputRef.current = true;
     stopRecognition();
   };
   const handleInputBlur = () => {
-    console.log("[handleInputBlur] テキスト入力終了");
     // 少し遅延を入れてから手動入力フラグをリセット
     setTimeout(() => {
-      console.log("[handleInputBlur] 音声認識再開チェック", {
-        isManualInput: isManualInputRef.current,
-        isContinuousListening,
-        isVoiceEnabled
-      });
       isManualInputRef.current = false;
       if (isContinuousListening && isVoiceEnabled) {
-        console.log("[handleInputBlur] 音声認識再開");
         restartRecognition(500, "after manual input blur");
       }
     }, 100);
@@ -512,20 +474,13 @@ function ChatPage() {
   // ====== メッセージ送信（手動ボタン/自動requestSubmit 共通） ======
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("[handleSubmit] テキスト送信開始");
     await sendMessage(input, false);
     setInput("");
     
     // テキスト送信後に音声認識を再開
     setTimeout(() => {
-      console.log("[handleSubmit] 音声認識再開チェック", {
-        isManualInput: isManualInputRef.current,
-        isContinuousListening,
-        isVoiceEnabled
-      });
       isManualInputRef.current = false;
       if (isContinuousListening && isVoiceEnabled) {
-        console.log("[handleSubmit] 音声認識再開");
         restartRecognition(500, "after text submit");
       }
     }, 200);
