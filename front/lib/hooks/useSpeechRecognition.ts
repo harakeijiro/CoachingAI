@@ -130,6 +130,7 @@ export const useSpeechRecognition = ({
           const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) finalText += transcript;
           else interim += transcript;
+          console.log("ああ")
         }
 
         console.log("音声認識結果:", {
