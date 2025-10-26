@@ -147,7 +147,7 @@ export const ChatInput = ({
                     paddingLeft: '2px'
                   }}
                 >
-                  {isLoading ? "応答中..." : "↑"}
+                  {isLoading ? "" : "↑"}
                 </button>
               )}
             </form>
@@ -158,7 +158,7 @@ export const ChatInput = ({
                 onClick={onSubmit}
                 className="absolute right-0 top-1/2 transform -translate-y-1/2 w-10 h-10 bg-white text-black rounded-full hover:bg-gray-100 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold text-lg flex items-center justify-center opacity-0 pointer-events-none"
               >
-                {isLoading ? "応答中..." : "↑"}
+                {isLoading ? "" : "↑"}
               </button>
             )}
           </div>
