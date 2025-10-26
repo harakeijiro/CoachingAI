@@ -26,6 +26,7 @@ function ChatPage() {
   const isManualInputRef = useRef<boolean>(false);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const speechBufferRef = useRef<string>("");
+  const lastSentVoiceTextRef = useRef<string>(""); // 最後に送信した音声認識テキスト
 
   // ★追加: 音声認識コールバックを後で差し込むためのref
   const onResultRef = useRef<(interim: string, finalText: string) => void>(() => {});
@@ -209,11 +210,19 @@ function ChatPage() {
         });
 
         if (textToSend && isContinuousListening) {
+          // 重複送信を防ぐ
+          if (textToSend === lastSentVoiceTextRef.current) {
+            console.log("[silence timeout] 重複送信をスキップ:", textToSend);
+            return;
+          }
+
           console.log("[silence timeout] sendMessage 実行:", textToSend);
 
           sendMessage(textToSend, true); // ← ← ← ここでAPIに投げる
-          setVoiceInput(""); // 音声認識結果をクリア
+          // 音声認識結果を即座にクリア
+          setVoiceInput("");
           speechBufferRef.current = "";
+          lastSentVoiceTextRef.current = textToSend; // 送信済みテキストを記録
         } else {
           console.log("[silence timeout] 送信スキップ");
         }
@@ -427,10 +436,13 @@ function ChatPage() {
     stopRecognition();
   };
   const handleInputBlur = () => {
-    isManualInputRef.current = false;
-    if (!input.trim() && isContinuousListening) {
-      restartRecognition(500, "after manual input");
-    }
+    // 少し遅延を入れてから手動入力フラグをリセット
+    setTimeout(() => {
+      isManualInputRef.current = false;
+      if (!input.trim() && isContinuousListening && isVoiceEnabled) {
+        restartRecognition(500, "after manual input");
+      }
+    }, 100);
   };
 
   // ====== ★ここが「文字が入ったら自動で送信ボタンを押す」実装 ======
