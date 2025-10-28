@@ -1,61 +1,47 @@
 "use client";
 
+/**
+ * ソーシャルログインボタンコンポーネント
+ * Google・MicrosoftのOAuth認証ボタンを提供
+ */
 import { useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase/client";
+import { AUTH_CONFIG } from "@/lib/utils/auth-config";
 
 interface SocialLoginButtonsProps {
-  onSuccess?: (message: string) => void;
-  onError?: (message: string) => void;
+  onGoogleSuccess?: (message: string) => void;
+  onMicrosoftSuccess?: (message: string) => void;
+  onGoogleError?: (message: string) => void;
+  onMicrosoftError?: (message: string) => void;
 }
 
 export default function SocialLoginButtons({
-  onSuccess,
-  onError,
+  onGoogleSuccess,
+  onMicrosoftSuccess,
+  onGoogleError,
+  onMicrosoftError,
 }: SocialLoginButtonsProps) {
   const [isLoading, setIsLoading] = useState<string | null>(null);
-
-  const getAppUrl = () => {
-    if (typeof window !== "undefined") {
-      return process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-    }
-    return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  };
 
   const handleSocialLogin = async (providerLabel: string) => {
     setIsLoading(providerLabel);
     try {
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          auth: {
-            detectSessionInUrl: true,
-            persistSession: true,
-            autoRefreshToken: true,
-            flowType: 'pkce',
-            debug: true
-          },
-          global: {
-            headers: {
-              'X-Client-Info': 'supabase-js-web'
-            }
-          }
-        }
-      );
+      const supabase = createClient();
 
       if (providerLabel === "Google") {
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
-            redirectTo: `${getAppUrl()}/decision`,
-            scopes: "openid email profile",
-            preferRedirect: true, // ポップアップ禁止モード
+            redirectTo: AUTH_CONFIG.providers.google.redirectTo,
+            scopes: AUTH_CONFIG.providers.google.scopes,
           },
         });
 
         if (error) {
-          onError?.("Googleでのログインに失敗しました");
+          onGoogleError?.("Googleでのログインに失敗しました");
           setIsLoading(null);
+        } else {
+          onGoogleSuccess?.("Googleログインを開始します...");
         }
         // 成功時はリダイレクトされるため、以降の処理は不要
         return;
@@ -66,24 +52,31 @@ export default function SocialLoginButtons({
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "azure",
           options: {
-            redirectTo: `${getAppUrl()}/auth/callback`, // 認証コールバックを経由
-            scopes: "openid email profile",
-            preferRedirect: true, // ポップアップ禁止モード
+            redirectTo: AUTH_CONFIG.providers.microsoft.redirectTo,
+            scopes: AUTH_CONFIG.providers.microsoft.scopes,
           },
         });
 
         if (error) {
-          onError?.("Microsoftでのログインに失敗しました");
+          onMicrosoftError?.("Microsoftでのログインに失敗しました");
           setIsLoading(null);
+        } else {
+          onMicrosoftSuccess?.("Microsoftログインを開始します...");
         }
         // 成功時はリダイレクトされるため、以降の処理は不要
         return;
       }
 
       // 他プロバイダは未実装
-      onError?.("未対応のプロバイダです");
+      onGoogleError?.("未対応のプロバイダです");
+      onMicrosoftError?.("未対応のプロバイダです");
     } catch {
-      onError?.("ソーシャルログインの開始に失敗しました");
+      // エラーが発生した場合、利用可能なエラーハンドラーを呼び出す
+      if (onGoogleError || onMicrosoftError) {
+        const message = "ソーシャルログインの開始に失敗しました";
+        onGoogleError?.(message);
+        onMicrosoftError?.(message);
+      }
       setIsLoading(null);
     }
   };

@@ -1,7 +1,12 @@
 "use client";
 
+/**
+ * メール認証フォームコンポーネント
+ * メールアドレスとパスワードを使った登録・ログイン機能を提供
+ */
 import { useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase/client";
+import { AUTH_CONFIG } from "@/lib/utils/auth-config";
 
 interface EmailAuthFormProps {
   onSuccess?: (message: string) => void;
@@ -51,25 +56,7 @@ export default function EmailAuthForm({
     setIsLoading(true);
     
     try {
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          auth: {
-            // Supabase認証設定
-            detectSessionInUrl: true,
-            persistSession: true,
-            autoRefreshToken: true,
-            flowType: 'pkce', // implicitからpkceに変更してpopup.jsエラーを解決
-            debug: false
-          },
-          global: {
-            headers: {
-              'X-Client-Info': 'supabase-js-web'
-            }
-          }
-        }
-      );
+      const supabase = createClient();
 
       // まず既存ユーザーかどうかを確認
       const { data: existingUser, error: checkError } = await supabase.auth.signInWithPassword({
@@ -78,35 +65,53 @@ export default function EmailAuthForm({
       });
 
       if (existingUser && !checkError) {
-        // 既存ユーザーの場合：メッセージを表示せずに直接テーマ選択画面に遷移
+        // 既存ユーザーの場合：メッセージを表示せずに直接判定画面に遷移
         console.log("Existing user login successful, redirecting to decision page");
         window.location.href = "/decision";
         return;
       }
 
       // 既存ユーザーでない場合、新規登録を試行
-      const { error } = await supabase.auth.signUp({
+      const { data: signUpData, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: "http://localhost:3000/auth/callback",
+          emailRedirectTo: AUTH_CONFIG.callbackUrlEmail,
         },
       });
 
-      console.log("SignUp result:", { error, email });
-      console.log("SignUp redirect URL:", "http://localhost:3000/auth/callback");
+      console.log("SignUp result:", { data: signUpData, error, email });
+      console.log("SignUp redirect URL:", AUTH_CONFIG.callbackUrlEmail);
       console.log("SignUp environment:", {
         supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
         hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       });
       console.log("SignUp options:", {
-        emailRedirectTo: "http://localhost:3000/auth/callback"
+        emailRedirectTo: AUTH_CONFIG.callbackUrlEmail
       });
 
       if (error) {
         console.error("SignUp error:", error);
-        onError?.(error.message);
-      } else {
+        
+        // 既存メールアドレスの場合
+        if (error.message.includes('already registered') || 
+            error.message.includes('User already registered')) {
+          onError?.("このメールアドレスは既に登録されています。パスワードでログインするか、Google/Microsoftでログインしてください。");
+        } else {
+          onError?.(error.message);
+        }
+      } else if (signUpData?.user) {
+        // ユーザーが存在する場合
+        const identities = signUpData.user.identities || [];
+        
+        // identitiesが空 = 既存ユーザー（OAuth登録済み）の可能性
+        if (identities.length === 0) {
+          console.log("Existing OAuth user detected (empty identities)");
+          onError?.("このメールアドレスは既にGoogle/Microsoftで登録されています。同じ方法でログインしてください。");
+          return;
+        }
+        
+        // 新規登録成功時のみメッセージ表示
         console.log("SignUp success, email sent to:", email);
         onSuccess?.("確認メールを送信しました");
         // フォームをリセット

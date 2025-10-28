@@ -171,6 +171,7 @@ export const useSpeechRecognition = ({
         recognitionRef.current?.stop();
       } catch {}
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 依存配列を空にして一度だけ実行
 
   // isVoiceEnabled が false になった時に音声認識を停止

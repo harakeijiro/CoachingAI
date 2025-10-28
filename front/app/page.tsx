@@ -1,10 +1,13 @@
 "use client";
 
+/**
+ * ホームページ（ランディングページ）
+ * アプリの紹介と認証モーダルを表示
+ */
 import Link from "next/link";
 import Image from "next/image";
 import Logo from "@/components/ui/logo";
-import SocialLoginButtons from "@/components/auth/social-login-buttons";
-import EmailAuthForm from "@/components/auth/EmailAuthForm";
+import AuthModal from "@/components/auth/AuthModal";
 import { useState, useEffect } from "react";
 
 export default function Home() {
@@ -18,8 +21,6 @@ export default function Home() {
   
   // 認証モーダル状態管理
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string>("");
-  const [errorMessage, setErrorMessage] = useState<string>("");
   
   const mainText = "話すことで心が揺れる";
   
@@ -30,43 +31,7 @@ export default function Home() {
 
   const closeAuthModal = () => {
     setShowAuthModal(false);
-    setSuccessMessage("");
-    setErrorMessage("");
   };
-
-  const handleAuthSuccess = (message: string) => {
-    setSuccessMessage(message);
-    setErrorMessage("");
-    // メール認証成功時は自動でモーダルを閉じない（ユーザーが手動で閉じるまで表示）
-  };
-
-  const handleAuthError = (message: string) => {
-    setErrorMessage(message);
-    setSuccessMessage("");
-  };
-  
-  
-  // ESCキーでモーダルを閉じる
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && showAuthModal) {
-        closeAuthModal();
-      }
-    };
-
-    if (showAuthModal) {
-      document.addEventListener('keydown', handleKeyDown);
-      // モーダル表示時はスクロールを無効化
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'unset';
-    };
-  }, [showAuthModal]);
 
   // Hydration完了を検知とタイピングアニメーション開始
   useEffect(() => {
@@ -185,63 +150,8 @@ export default function Home() {
       </section>
 
      
-
       {/* 認証モーダル */}
-      {showAuthModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* 背景のぼかし効果 */}
-          <div 
-            className="absolute inset-0 bg-black/20 backdrop-blur-sm animate-in fade-in-0 duration-300"
-            onClick={closeAuthModal}
-          />
-          
-          {/* 認証カード */}
-          <div className="relative z-10 animate-in fade-in-0 zoom-in-95 duration-300">
-            <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm py-10 px-8 shadow-2xl rounded-3xl border border-white/20 dark:border-gray-700/50 max-w-sm mx-auto">
-              {/* 閉じるボタン */}
-              <button
-                onClick={closeAuthModal}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-              
-              {/* ロゴ・タイトル */}
-              <div className="text-center mb-8 mt-2">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center justify-center gap-3">
-                  ようこそ
-                  <Logo size="lg" />
-                </h1>
-              </div>
-
-              {/* メッセージ表示 */}
-              {successMessage && (
-                <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg max-w-64 mx-auto">
-                  <p className="text-sm text-green-600 dark:text-green-400 whitespace-pre-line">
-                    {successMessage}
-                  </p>
-                </div>
-              )}
-
-              {errorMessage && (
-                <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                  <p className="text-sm text-red-600 dark:text-red-400">
-                    {errorMessage}
-                  </p>
-                </div>
-              )}
-
-              {/* ソーシャルログインボタン */}
-              <SocialLoginButtons onSuccess={handleAuthSuccess} onError={handleAuthError} />
-              
-              {/* メール認証フォーム */}
-              <EmailAuthForm onSuccess={handleAuthSuccess} onError={handleAuthError} />
-            </div>
-          </div>
-        </div>
-      )}
+      <AuthModal show={showAuthModal} onClose={closeAuthModal} />
 
       {/* フッター */}
       <footer className="fixed bottom-0 left-0 right-0 py-6 px-4 sm:px-6 lg:px-8 text-gray-700 dark:text-gray-300 backdrop-blur-md">

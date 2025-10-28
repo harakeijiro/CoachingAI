@@ -8,12 +8,26 @@ export interface UserValidationResult {
   reason?: string;
 }
 
+interface SupabaseUser {
+  id?: string;
+  email?: string;
+  email_confirmed_at?: string | null;
+  confirmed_at?: string | null;
+  last_sign_in_at?: string | null;
+  app_metadata?: {
+    provider?: string;
+  };
+  user_metadata?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+}
+
 /**
  * 有効な組織ユーザーかどうかを検証
  * @param user Supabaseのsession.userオブジェクト
  * @returns 検証結果
  */
-export function isValidOrgUser(user: any): UserValidationResult {
+export function isValidOrgUser(user: SupabaseUser | null): UserValidationResult {
   // 1. ユーザーオブジェクトが存在するか
   if (!user) {
     return {
@@ -30,8 +44,9 @@ export function isValidOrgUser(user: any): UserValidationResult {
     };
   }
 
-  // 3. メールが確認済みか（Microsoft OAuthはだいたいverified扱いで返るはずだけど念のため）
-  if (!user.email_confirmed_at) {
+  // 3. メールが確認済みか（Supabaseでは confirmed_at や last_sign_in_at が入る場合もある）
+  // email_confirmed_at, confirmed_at, last_sign_in_at のいずれかがあれば確認済みとする
+  if (!user.email_confirmed_at && !user.confirmed_at && !user.last_sign_in_at) {
     return {
       isValid: false,
       reason: "メールアドレスが確認されていません"
@@ -79,8 +94,9 @@ function isValidProvider(provider: string): boolean {
     "azure",      // Microsoft Azure AD
     "azuread",    // Microsoft Azure AD (別名)
     "azure_ad",   // Microsoft Azure AD (別名)
-    "google",     // Google (将来の拡張用)
-    "microsoft"   // Microsoft (将来の拡張用)
+    "google",     // Google
+    "microsoft",  // Microsoft (将来の拡張用)
+    "email"       // メール認証
   ];
   
   return validProviders.includes(provider.toLowerCase());
@@ -91,7 +107,7 @@ function isValidProvider(provider: string): boolean {
  * @param user Supabaseのsession.userオブジェクト
  * @param context ログのコンテキスト
  */
-export function logUserInfo(user: any, context: string): void {
+export function logUserInfo(user: SupabaseUser | null, context: string): void {
   console.log(`${context}: User validation info:`, {
     id: user?.id,
     email: user?.email,
@@ -104,12 +120,19 @@ export function logUserInfo(user: any, context: string): void {
   });
 }
 
+interface SupabaseSession {
+  user?: SupabaseUser;
+  access_token?: string;
+  refresh_token?: string;
+  expires_at?: number;
+}
+
 /**
  * セッションの有効性を検証
  * @param session Supabaseのsessionオブジェクト
  * @returns 検証結果
  */
-export function validateSession(session: any): UserValidationResult {
+export function validateSession(session: SupabaseSession | null): UserValidationResult {
   if (!session) {
     return {
       isValid: false,
@@ -124,12 +147,12 @@ export function validateSession(session: any): UserValidationResult {
     };
   }
 
-  if (!session.access_token || !session.refresh_token) {
+  if (!session.access_token) {
     return {
       isValid: false,
-      reason: "セッションにトークンが含まれていません"
+      reason: "アクセストークンが無効です"
     };
-  }
+  }  
 
   // セッションの有効期限を確認
   const now = Math.floor(Date.now() / 1000);

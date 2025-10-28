@@ -1,8 +1,12 @@
 "use client";
 
+/**
+ * 認証ガードコンポーネント
+ * 認証済みユーザーのみ子コンポーネントを表示し、未認証はトップページにリダイレクト
+ */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabase/client";
 import { isValidOrgUser, logUserInfo, validateSession } from "@/lib/utils/user-validation";
 
 interface AuthGuardProps {
@@ -17,30 +21,8 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     const checkAuth = async () => {
       try {
         console.log("AuthGuard: Starting auth check");
-        console.log("AuthGuard: Environment variables:", {
-          url: process.env.NEXT_PUBLIC_SUPABASE_URL ? "SET" : "NOT SET",
-          key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "SET" : "NOT SET"
-        });
         
-        const supabase = createBrowserClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-          {
-            auth: {
-              // Supabase認証設定
-              detectSessionInUrl: true,
-              persistSession: true,
-              autoRefreshToken: true,
-              flowType: 'pkce',
-              debug: true // デバッグを有効化
-            },
-            global: {
-              headers: {
-                'X-Client-Info': 'supabase-js-web'
-              }
-            }
-          }
-        );
+        const supabase = createClient();
         
         // セッションを確認
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
