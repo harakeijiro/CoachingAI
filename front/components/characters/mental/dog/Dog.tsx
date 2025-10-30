@@ -1,6 +1,7 @@
 /**
- * 犬キャラクターの統合コンポーネント
- * 各機能（Model, Voice, Animations, Behavior）を統合
+ * 犬キャラクター統合コンポーネント
+ * - 3Dモデル、音声、アニメーション、行動制御を統合
+ * - 会話中の状態（isTalking）に応じて口パクやアニメーションを制御
  */
 
 import React, { useRef } from "react";

@@ -1,3 +1,10 @@
+/**
+ * キャラクターとの会話メインページ
+ * - Whisper音声認識によるリアルタイム対話
+ * - 3Dキャラクター表示と口パクアニメーション
+ * - テキスト入力と音声入力の両対応
+ * - TTSによる音声応答
+ */
 "use client";
 
 import { Suspense, useRef, useEffect, useState, useCallback } from "react";
@@ -7,7 +14,7 @@ import { useRouter } from "next/navigation";
 import { Dog } from "@/components/characters/mental/dog";
 import AuthGuard from "@/components/auth/auth-guard";
 import { requestMicrophonePermission, checkMicrophonePermissionState } from "@/lib/utils/microphone-permission";
-import { useSpeechRecognition } from "@/lib/hooks/useSpeechRecognition";
+import { useWhisper } from "@/lib/hooks/useWhisper";
 import { useTTS } from "@/lib/hooks/useTTS";
 import { useChat, type Message } from "@/lib/hooks/useChat";
 import { ChatInput } from "@/components/chat/ChatInput";
@@ -15,21 +22,30 @@ import { MicrophonePermissionPopup } from "@/components/chat/MicrophonePermissio
 
 
 
+// STEP2-1: メッセージ型の定義（pending プロパティ付き）
+type VoiceMessage = {
+  id: string;
+  role: "user";
+  text: string;
+  pending: boolean;
+};
+
 function ChatPage() {
   const router = useRouter();
 
   // 1. stateやref類
   const [input, setInput] = useState("");
   const [voiceInput, setVoiceInput] = useState(""); // 音声認識専用の状態
-  const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
-  const [isContinuousListening, setIsContinuousListening] = useState(false);
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(true); // デフォルトはON（自動録音開始）
+  const [isContinuousListening, setIsContinuousListening] = useState(false); // 手動録音モード
+  
+  // STEP2-2: voiceMessages state を追加
+  const [voiceMessages, setVoiceMessages] = useState<VoiceMessage[]>([]);
+  
   const isManualInputRef = useRef<boolean>(false);
   const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const speechBufferRef = useRef<string>("");
   const lastSentVoiceTextRef = useRef<string>(""); // 最後に送信した音声認識テキスト
-
-  // ★追加: 音声認識コールバックを後で差し込むためのref
-  const onResultRef = useRef<(interim: string, finalText: string) => void>(() => {});
 
   // ====== フォーム自動送信用 追加 ======
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -89,7 +105,6 @@ function ChatPage() {
           const rms = Math.sqrt(sum / dataArray.length) / 255;
 
           if (rms > volumeThreshold) {
-            console.log("ユーザーが話し始めました、TTSをキャンセル:", rms);
             cancelSpeaking();
             if (isContinuousListening && !isManualInputRef.current) {
               setTimeout(() => {
@@ -103,7 +118,6 @@ function ChatPage() {
       console.error("Volume monitoring failed:", error);
       // マイクの許可が拒否された場合の処理
       if (error instanceof DOMException && error.name === "NotAllowedError") {
-        console.log("マイクの許可が拒否されました。音量監視を停止します。");
         return;
       }
     }
@@ -122,44 +136,148 @@ function ChatPage() {
     } catch {}
   };
 
-  // 2. useSpeechRecognition をここで呼ぶ（ref経由で後から差し替え）
+  // 2. isSpeakingRefを外部で作成（これが唯一の真実）
+  const isSpeakingRef = useRef<boolean>(false);
+  
+  // STEP2-3: onResult 関数の実装
+  // 重複呼び出しを防ぐためのref（messageId単位で管理）
+  const processingMessageIdsRef = useRef<Set<string>>(new Set());
+  
+  // ユーザー発話メッセージの自動削除用タイマー（messageId単位で管理）
+  const messageClearTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  
+  const handleWhisperResult = useCallback((messageId: string, text: string) => {
+    // 空文字の場合はメッセージを削除
+    if (text === "") {
+      // 既存のタイマーがあればクリア
+      const existingTimer = messageClearTimersRef.current.get(messageId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        messageClearTimersRef.current.delete(messageId);
+      }
+      
+      setVoiceMessages((prev) => {
+        return prev.filter((msg) => msg.id !== messageId);
+      });
+      processingMessageIdsRef.current.delete(messageId);
+      return;
+    }
+    
+    // 仮テキスト（"…"）の重複呼び出しを防ぐ（refで即座にチェック）
+    const isPendingText = text === "…";
+    if (isPendingText && processingMessageIdsRef.current.has(messageId)) {
+      return;
+    }
+    
+    setVoiceMessages((prev) => {
+      // 1. その id のメッセージがまだなければ、新規 push { id: messageId, role:"user", text, pending:true }
+      const existingIndex = prev.findIndex((msg) => msg.id !== messageId);
+      
+      if (existingIndex === -1) {
+        // 新規作成（仮メッセージ "…" の場合）
+        // 仮メッセージの場合は処理中フラグを立てる（setStateの前で実行）
+        if (isPendingText) {
+          processingMessageIdsRef.current.add(messageId);
+        }
+        
+        const newMessage = {
+          id: messageId,
+          role: "user" as const,
+          text: text,
+          pending: isPendingText,
+        };
+        return [...prev, newMessage];
+      } else {
+        // 2. その id のメッセージがすでにあれば、その要素の text を text で上書きし、pending: false に更新
+        const newMessages = [...prev];
+        
+        // 実テキストが来たら処理中フラグを解除（setStateの前で実行）
+        if (!isPendingText) {
+          processingMessageIdsRef.current.delete(messageId);
+          
+          // 既存のタイマーがあればクリア（更新されたメッセージには新しいタイマーを設定するため）
+          const existingTimer = messageClearTimersRef.current.get(messageId);
+          if (existingTimer) {
+            clearTimeout(existingTimer);
+            messageClearTimersRef.current.delete(messageId);
+          }
+          
+          // メッセージが確定（pending: false）になった時点から2秒後に削除
+          const timer = setTimeout(() => {
+            setVoiceMessages((prev) => {
+              return prev.filter((msg) => msg.id !== messageId);
+            });
+            messageClearTimersRef.current.delete(messageId);
+          }, 2000); // 2秒後
+          
+          messageClearTimersRef.current.set(messageId, timer);
+        }
+        
+        newMessages[existingIndex] = {
+          ...newMessages[existingIndex],
+          text: text,
+          pending: isPendingText,
+        };
+        return newMessages;
+      }
+    });
+  }, []);
+  
+  // 3. useWhisper をここで呼ぶ（新しい形式）
   const {
-    supportsSpeech,
     isRecording,
-    startRecognition,
-    stopRecognition,
-    restartRecognition,
-  } = useSpeechRecognition({
-    isVoiceEnabled,
-    isContinuousListening,
-    isManualInput: isManualInputRef.current,
-    onResult: (interim, finalText) => {
-      // ← ここが超ポイント
-      onResultRef.current(interim, finalText);
+    isSpeaking,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+    sessionId,
+  } = useWhisper({
+    onResult: (messageId, text) => {
+      // 新しい形式で onResult を呼ぶ
+      handleWhisperResult(messageId, text);
     },
     onError: (error) => {
-      console.log("[useSpeechRecognition onError]", error);
+      console.error("[useWhisper onError]", error);
+      // エラーメッセージをユーザーに表示
+      // 503エラーの場合はユーザーフレンドリーなメッセージが既に設定されている
+      alert(error);
+    },
+    onTtsEnd: async () => {
+      // TTS終了後は自動録音を開始しない
+      // ユーザーが明示的に話しかけるまで待つ
     },
   });
 
-  // 3. その後に useTTS / useChat を呼ぶ。今度はダミーを渡さず、本物を渡す
+  // Whisperベースなので、restartRecognition、startRecognitionは不要（ダミーを提供）
+  const supportsSpeech = true; // Whisperは常に利用可能
+  const stopRecognition = stopRecording; // stopRecordingをstopRecognitionとして使用
+  const startRecognition = startRecording; // startRecordingをstartRecognitionとして使用
+  const restartRecognition = (delay?: number, context?: string) => {
+    // Whisper mode: 自動再開は不要（ユーザーが手動で録音を開始）
+  };
+
+  // 4. useTTS を呼ぶ（isSpeakingRefを渡す）
   const {
-    isSpeaking,
+    isSpeaking: ttsIsSpeaking,
     supportsTTS,
     speak,
     cancelSpeaking,
-    isSpeakingRef,
   } = useTTS({
-    onTtsStart: () => {},
-    onTtsEnd: () => {},
-    stopRecognition,       // ← もうダミーじゃない
+    isSpeakingRef, // 同じrefを渡す
+    onTtsStart: () => {
+      // TTS開始 → 音声認識停止（beginSpeaking内で処理）
+    },
+    onTtsEnd: () => {
+      // TTS終了 → 音声認識再開（endSpeaking内で処理）
+    },
+    stopRecognition,
     startVolumeMonitoring,
     stopVolumeMonitoring,
-    restartRecognition,    // ← もうダミーじゃない
+    restartRecognition,
   });
 
-  // 3Dの口パク
-  const isTalking = isSpeaking;
+  // 3Dの口パク（WhisperのisSpeakingを使用）
+  const isTalking = ttsIsSpeaking || isSpeaking;
 
   const {
     messages,
@@ -175,77 +293,53 @@ function ChatPage() {
     restartRecognition,    // ← 本物
   });
 
-  // 4. handleSpeechResult を定義して、最後に onResultRef.current に差し込む
-  const SILENCE_DELAY_MS = 2000;
-
-  const handleSpeechResult = useCallback(
-    (interim: string, finalText: string) => {
-      if (isManualInputRef.current) {
-        return;
-      }
-
-      // 送信済みテキストと同じ場合は表示も更新しない
-      const currentText = finalText || interim;
-      if (currentText && currentText === lastSentVoiceTextRef.current) {
-        return;
-      }
-
-      // 音声認識結果を専用の状態（voiceInput）に設定
-      setVoiceInput(prev => {
-        const base = prev.replace(/（話し中….*）$/u, "");
-        const newValue = finalText ? finalText : (interim ? interim : base);
-        return newValue;
-      });
-
-      // バッファ更新（final > interim）
-      const latestText = (finalText || interim || "").trim();
-      if (latestText) {
-        speechBufferRef.current = latestText;
-      }
-
-      // サイレンスタイマーを張り直し
-      if (silenceTimeoutRef.current) {
-        clearTimeout(silenceTimeoutRef.current);
-      }
-
-      silenceTimeoutRef.current = setTimeout(() => {
-        const textToSend = (speechBufferRef.current || "").trim();
-
-        if (textToSend && isContinuousListening) {
-          // 重複送信を防ぐ
-          if (textToSend === lastSentVoiceTextRef.current) {
-            return;
-          }
-
-          // 音声認識結果を即座にクリア（送信と同時に）
-          setVoiceInput("");
-          speechBufferRef.current = "";
-          lastSentVoiceTextRef.current = textToSend; // 送信済みテキストを記録
-          
-          sendMessage(textToSend, true);
-        }
-      }, SILENCE_DELAY_MS);
-    },
-    [isContinuousListening, sendMessage, voiceInput]
-  );
-
-  // ★このuseEffectで、最新のhandleSpeechResultをonResultRefに反映する
-  useEffect(() => {
-    onResultRef.current = handleSpeechResult;
-  }, [handleSpeechResult]);
+  // 注: 古い handleSpeechResult と onResultRef は削除しました
+  // 新しい実装では useWhisper の onResult が直接 handleWhisperResult を呼びます
+  // voiceMessages state を UI で表示してください
 
 
   // クリーンアップ処理
   useEffect(() => {
     return () => {
-      const timeoutId = silenceTimeoutRef.current;
-      if (timeoutId) clearTimeout(timeoutId);
+      // silenceTimeoutのクリーンアップ
+      const silenceTimeout = silenceTimeoutRef.current;
+      if (silenceTimeout) clearTimeout(silenceTimeout);
+      
       stopVolumeMonitoring();
+      
+      // ユーザー発話メッセージのタイマーもクリーンアップ（最新の状態を取得）
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      messageClearTimersRef.current.forEach((timer) => {
+        clearTimeout(timer);
+      });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      messageClearTimersRef.current.clear();
     };
   }, []);
 
   // ユーザーインタラクション検知用
-  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const [hasUserInteracted, setHasUserInteracted] = useState(true); // 最初からインタラクション済みとして扱う
+
+  // マイクを自動開始
+  useEffect(() => {
+    const autoStartMic = async () => {
+      try {
+        const result = await requestMicrophonePermission();
+        if (result.success && result.stream) {
+          await startRecording();
+        }
+      } catch (error) {
+        console.error("[自動マイク開始] エラー:", error);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      autoStartMic();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 初回レンダリング時のみ実行
 
   // ユーザーインタラクション検知
   useEffect(() => {
@@ -255,9 +349,7 @@ function ChatPage() {
       // マイクの許可を事前に要求
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
-        console.log("マイクの許可が事前に得られました");
       } catch (e) {
-        console.log("マイクの許可が事前に拒否されました:", e);
         // エラーは無視して続行（後で再試行する）
       }
       
@@ -277,7 +369,6 @@ function ChatPage() {
           
           if (micState === "granted") {
             // 既に許可済みの場合は自動的にインタラクションを検知
-            console.log("マイクが既に許可済みです。自動的に音声認識を開始します。");
             setHasUserInteracted(true);
             
             // 自動挨拶を無効化 - メッセージもTTSも実行しない
@@ -309,7 +400,6 @@ function ChatPage() {
             // setMessages([greetingMessage]);
           }
         } catch (error) {
-          console.log("マイク状態チェックエラー:", error);
           // エラーの場合は通常のイベントリスナーを設定
           document.addEventListener("click", handleUserInteraction);
           document.addEventListener("keydown", handleUserInteraction);
@@ -365,9 +455,7 @@ function ChatPage() {
       
       if (result.success && result.stream) {
         setShowMicPopup(false);
-        // 音声認識を開始
         startRecognition();
-        console.log("マイク許可が得られました。音声認識を開始します。");
       } else {
         alert(result.error || "マイクの許可が必要です");
       }
@@ -389,43 +477,19 @@ function ChatPage() {
       !isContinuousListening &&
       hasUserInteracted
     ) {
-      console.log("[ChatPage] 条件クリア: continuous listening を有効化します");
-      setIsContinuousListening(true);
-
-      // マイクの許可を求めてから音声認識を開始
       const startRecognitionWithPermission = async () => {
-        console.log("[ChatPage] startRecognitionWithPermission 実行開始");
-        // 新しいシンプルなマイク許可処理を使用
         const result = await requestMicrophonePermission();
 
         if (result.success && result.stream) {
-          // 音声認識を開始
           startRecognition();
-          console.log("音声認識を開始しました");
-          
-          // 自動挨拶を無効化 - 音声認識開始時の挨拶送信を停止
-          // if (messages.length === 0) {
-          //   setTimeout(() => {
-          //     const greetingMessage = "こんにちは！話しかけてみてください。";
-          //     handleAutoSubmit(greetingMessage);
-          //   }, 2000); // 2秒後に挨拶
-          // }
         } else {
-          // エラーメッセージを表示
           alert(result.error || "マイクの許可が必要です");
-          setHasUserInteracted(false); // 再インタラクションを促す
+          setHasUserInteracted(false);
         }
       };
 
-      // 既にマイク許可が取得済みの場合は即座に開始、そうでなければ少し待機
       const delay = hasUserInteracted ? 100 : 500;
       setTimeout(startRecognitionWithPermission, delay);
-    } else {
-      console.log("[ChatPage] continuous listening 未開始", {
-        supportsSpeech,
-        isContinuousListening,
-        hasUserInteracted,
-      });
     }
   }, [supportsSpeech, isContinuousListening, hasUserInteracted, messages.length]);
 
@@ -494,26 +558,28 @@ function ChatPage() {
   };
 
   // マイクボタンのクリック処理（音声認識の有効/無効切り替え）
-  const handleMicButtonClick = () => {
-    console.log("[DEBUG] handleMicButtonClick called", {
-      isVoiceEnabled,
-      isContinuousListening,
-      supportsSpeech
-    });
+    const handleMicButtonClick = async () => {
     
     if (isVoiceEnabled) {
-      // 音声認識を無効にする
-      stopRecognition();
+      // 🔴 現在ON → OFFにする（録音停止→送信）
+      stopRecording(); // 録音停止→Whisper送信
       setIsVoiceEnabled(false);
-      console.log("音声認識を無効にしました");
     } else {
-      // 音声認識を有効にする
-      if (isContinuousListening) {
-        startRecognition();
+      // 🟢 現在OFF → ONにする（録音開始）
+      // 1. マイク許可チェック/確保
+      const result = await requestMicrophonePermission();
+      if (!result.success || !result.stream) {
+        alert(result.error || "マイクの許可が必要です");
+        return;
+      }
+
+      // 2. 録音開始をトライ（awaitして完了を待つ）
+      try {
+        await startRecording();
         setIsVoiceEnabled(true);
-        console.log("音声認識を有効にしました");
-      } else {
-        console.log("continuous listening が無効のため、音声認識を有効にできません");
+      } catch (error) {
+        console.error("録音開始に失敗:", error);
+        alert("録音の開始に失敗しました");
       }
     }
   };
@@ -554,6 +620,26 @@ function ChatPage() {
             <Environment preset="sunset" />
           </Suspense>
         </Canvas>
+      </div>
+
+      {/* ユーザーの発話ログ（自分側吹き出し）- Canvasの外側に配置 */}
+      <div className="fixed bottom-16 right-0 left-0 max-h-[40vh] overflow-y-auto px-4 flex flex-col items-center gap-2 pointer-events-none z-50">
+        {voiceMessages.map((msg) => (
+          <div
+            key={msg.id}
+            className={`w-full flex items-center justify-center text-base text-white transition-all duration-300 ${
+              msg.pending
+                ? "opacity-90"
+                : "opacity-100"
+            }`}
+            style={{
+              textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+              minHeight: '40px',
+            }}
+          >
+            <span className="font-medium">{msg.text}</span>
+          </div>
+        ))}
       </div>
 
       {/* マイクボタン（チャット欄の少し右） */}

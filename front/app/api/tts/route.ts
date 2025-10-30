@@ -1,3 +1,8 @@
+/**
+ * 音声合成（TTS）APIエンドポイント
+ * - Cartesia APIを使用してテキストを音声に変換
+ * - WAV形式の音声データを返却
+ */
 export const runtime = "edge";
 
 type TtsRequest = {

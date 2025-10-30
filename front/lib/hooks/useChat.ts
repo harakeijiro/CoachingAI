@@ -1,3 +1,10 @@
+/**
+ * チャット機能カスタムフック
+ * - メッセージ送信・受信管理
+ * - Gemini APIとのストリーミング通信
+ * - センテンス単位での自動TTS再生
+ * - 音声認識とTTSの制御
+ */
 "use client";
 
 import { useState } from "react";

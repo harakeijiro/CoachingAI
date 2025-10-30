@@ -1,8 +1,16 @@
+/**
+ * 音声合成（TTS）カスタムフック
+ * - Cartesia TTS APIによる高品質音声生成
+ * - Web Speech APIへのフォールバック
+ * - 音声キュー管理による連続再生
+ * - 音声再生中の状態管理と音声認識制御
+ */
 "use client";
 
 import { useRef, useState, useEffect } from "react";
 
 interface UseTTSProps {
+  isSpeakingRef?: React.MutableRefObject<boolean>; // 外部から渡されるref（共有用）
   onTtsStart?: () => void;
   onTtsEnd?: () => void;
   stopRecognition?: () => void;
@@ -12,6 +20,7 @@ interface UseTTSProps {
 }
 
 export const useTTS = ({
+  isSpeakingRef: externalIsSpeakingRef,
   onTtsStart,
   onTtsEnd,
   stopRecognition,
@@ -30,11 +39,15 @@ export const useTTS = ({
   const audioQueueRef = useRef<string[]>([]);
   const isPlayingQueueRef = useRef(false);
 
-  // isSpeakingRefをsetIsSpeakingと同期
-  const isSpeakingRef = useRef(false);
+  // isSpeakingRefをsetIsSpeakingと同期（外部のrefがある場合はそれを使う）
+  const internalIsSpeakingRef = useRef(false);
+  const isSpeakingRef = externalIsSpeakingRef || internalIsSpeakingRef;
+  
   useEffect(() => {
-    isSpeakingRef.current = isSpeaking;
-  }, [isSpeaking]);
+    if (!externalIsSpeakingRef) {
+      isSpeakingRef.current = isSpeaking;
+    }
+  }, [isSpeaking, externalIsSpeakingRef, isSpeakingRef]);
 
   // TTS 初期化
   useEffect(() => {
@@ -75,7 +88,46 @@ export const useTTS = ({
     };
   }, []);
 
-  // TTS 制御
+  // TTS 制御 - 開始処理（isSpeakingRefを即座に更新）
+  const beginSpeaking = () => {
+    console.log("[useTTS] beginSpeaking: 音声再生開始");
+    setIsSpeaking(true);
+    isSpeakingRef.current = true;  // ← 即座に更新
+    
+    // 音声認識を確実に停止
+    if (stopRecognition) {
+      try {
+        stopRecognition();
+        console.log("[useTTS] 音声認識停止完了");
+      } catch (error) {
+        console.error("[useTTS] stopRecognition error:", error);
+      }
+    }
+    
+    startVolumeMonitoring?.();
+    onTtsStart?.();
+  };
+
+  // TTS 制御 - 終了処理（isSpeakingRefを即座に更新）
+  const endSpeaking = () => {
+    console.log("[useTTS] endSpeaking: 音声再生完了");
+    setIsSpeaking(false);
+    isSpeakingRef.current = false;  // ← 即座に更新
+    stopVolumeMonitoring?.();
+    
+    // 音声認識を再開
+    if (restartRecognition) {
+      try {
+        restartRecognition(500, "after TTS ended");
+        console.log("[useTTS] 音声認識再開スケジュール完了");
+      } catch (error) {
+        console.error("[useTTS] restartRecognition error:", error);
+      }
+    }
+    
+    onTtsEnd?.();
+  };
+
   const cancelSpeaking = () => {
     audioQueueRef.current = [];
     isPlayingQueueRef.current = false;
@@ -86,6 +138,7 @@ export const useTTS = ({
       window?.speechSynthesis?.cancel?.();
     } catch {}
     setIsSpeaking(false);
+    isSpeakingRef.current = false;  // ← 即座に更新
   };
 
   const playNextInQueue = async () => {
@@ -106,24 +159,18 @@ export const useTTS = ({
       const a = new Audio(url);
       setAudioEl(a);
       a.onplay = () => {
-        setIsSpeaking(true);
-        isSpeakingRef.current = true;
-        try {
-          stopRecognition?.();
-        } catch {}
-        startVolumeMonitoring?.();
-        onTtsStart?.();
+        beginSpeaking();
       };
       a.onended = () => {
         URL.revokeObjectURL(url);
         isPlayingQueueRef.current = false;
-        onTtsEnded();
+        endSpeaking();
         playNextInQueue();
       };
       a.onerror = () => {
         URL.revokeObjectURL(url);
         isPlayingQueueRef.current = false;
-        onTtsEnded();
+        endSpeaking();
         playNextInQueue();
       };
       await a.play();
@@ -163,22 +210,16 @@ export const useTTS = ({
             if (jaVoices[0]) utt.voice = jaVoices[0];
           }
           utt.onstart = () => {
-            setIsSpeaking(true);
-            isSpeakingRef.current = true;
-            try {
-              stopRecognition?.();
-            } catch {}
-            startVolumeMonitoring?.();
-            onTtsStart?.();
+            beginSpeaking();
           };
           utt.onend = () => {
             isPlayingQueueRef.current = false;
-            onTtsEnded();
+            endSpeaking();
             playNextInQueue();
           };
           utt.onerror = () => {
             isPlayingQueueRef.current = false;
-            onTtsEnded();
+            endSpeaking();
             playNextInQueue();
           };
           utteranceRef.current = utt;
@@ -196,14 +237,6 @@ export const useTTS = ({
     if (!text) return;
     audioQueueRef.current.push(text);
     playNextInQueue();
-  };
-
-  const onTtsEnded = () => {
-    setIsSpeaking(false);
-    isSpeakingRef.current = false;
-    stopVolumeMonitoring?.();
-    restartRecognition?.(300, "after TTS ended");
-    onTtsEnd?.();
   };
 
   return {

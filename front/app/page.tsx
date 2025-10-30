@@ -67,8 +67,8 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-indigo-900 dark:to-purple-900">
       {/* ヘッダー - ナビゲーション */}
       <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md" style={{ marginTop: '20px' }}>
-        <nav className="max-w-7xl mx-auto px-0 sm:px-0 lg:px-0 h-16 flex items-center justify-between header-nav">
-          <div className="flex items-center gap-0 -ml-6 header-logo">
+        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between header-nav">
+          <div className="flex items-center gap-0 header-logo">
             <Image
               src="/icon-logo.png"
               alt="CoachingAI Icon"
@@ -78,16 +78,16 @@ export default function Home() {
             />
             <Logo size="lg" className="ml-2" />
           </div>
-          <div className="flex items-center gap-4 header-buttons">
+          <div className="flex items-center gap-2 sm:gap-4 header-buttons">
             <button
               onClick={handleAuthClick}
-              className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 font-medium transition-colors"
+              className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 font-medium transition-colors text-sm sm:text-base"
             >
               ログイン
             </button>
             <button
               onClick={handleAuthClick}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-6 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-3 sm:px-6 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl text-sm sm:text-base whitespace-nowrap"
             >
               無料で始める
             </button>

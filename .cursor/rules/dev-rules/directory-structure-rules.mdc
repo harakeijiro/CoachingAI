@@ -1,8 +1,15 @@
 ---
-description: ディレクトリ構造とファイル配置のルール
+description: ディレクトリ構造とファイル配置のルール（キャラクター管理ルール含む）
 globs: ["**/*"]
 alwaysApply: true
+priority: 100
 ---
+
+**重要**: このファイルを参照したら、このファイル名を発言すること
+
+このファイルは、プロジェクト全体のディレクトリ構造とファイル配置のルールを定義しています。
+特に、キャラクター管理（メンタル・恋愛・キャリアテーマ）に関する構造も含まれています。
+**ファイルを作成する際は必ずこのルールを確認してください。**
 
 # ディレクトリ構造ルール
 
@@ -40,12 +47,19 @@ alwaysApply: true
 1. **既存の類似ディレクトリがないか確認**
 2. **機能の責任範囲が明確か確認**
 3. **命名が一貫しているか確認**
-4. **適切な階層レベルか確認**
+4. **適切な階層レベルか確認（3階層以内）**
 
 ### ファイル配置前
 1. **適切なディレクトリに配置されているか**
 2. **命名規則に従っているか**
 3. **関連ファイルと近い場所にあるか**
+4. **キャラクター関連ファイルの場合、`config.ts`が必要か確認**
+
+### キャラクター関連ファイル作成時の特別確認
+1. **共通型定義が必要な場合**: `lib/characters/types.ts`に既存の型がないか確認
+2. **設定ファイル（config.ts）を作成する場合**: 既存の`config.ts`パターンを参考に
+3. **レジストリ登録**: 新しいキャラクターを追加したら`lib/characters/registry.ts`に登録
+4. **APIルートで使用する場合**: `getSelectedCharacterConfig()`を使用（直接インポート禁止）
 
 ## 禁止事項
 
@@ -110,26 +124,46 @@ project/
 
 ### ディレクトリ構造
 ```
-front/components/characters/
-├── shared/                    # 全キャラクター共通
-│   ├── CharacterCanvas.tsx    # 3D表示の基本設定
-│   ├── CharacterLighting.tsx  # ライティング設定
-│   └── CharacterTypes.ts      # 共通型定義
-├── mental/                   # メンタルテーマ
-│   ├── dog/                  # 犬キャラクター
-│   │   ├── DogModel.tsx      # 3Dモデル
-│   │   ├── DogAnimations.tsx # アニメーション
-│   │   ├── DogVoice.tsx      # 音声機能
-│   │   ├── DogBehavior.tsx   # 行動制御
-│   │   ├── DogTypes.ts      # 型定義
-│   │   └── index.ts         # エクスポート統合
-│   └── cat/                  # 猫キャラクター（将来）
-├── love/                     # 恋愛テーマ
-│   ├── mike/                 # マイクキャラクター（将来）
-│   └── cat/                  # 恋愛の猫
-└── career/                   # キャリアテーマ
-    ├── kent/                 # ケントキャラクター（将来）
-    └── owl/                  # フクロウキャラクター
+front/
+├── components/characters/
+│   ├── shared/                    # 全キャラクター共通
+│   │   ├── CharacterCanvas.tsx    # 3D表示の基本設定
+│   │   ├── CharacterLighting.tsx  # ライティング設定
+│   │   └── CharacterTypes.ts      # 共通型定義（BaseCharacterProps等）
+│   ├── mental/                   # メンタルテーマ
+│   │   └── dog/                  # 犬キャラクター
+│   │       ├── Dog.tsx            # 統合コンポーネント
+│   │       ├── DogModel.tsx       # 3Dモデル
+│   │       ├── DogAnimations.tsx  # アニメーション
+│   │       ├── DogVoice.tsx       # 音声機能
+│   │       ├── DogBehavior.tsx    # 行動制御
+│   │       ├── DogTypes.ts        # 型定義（Dog固有）
+│   │       ├── config.ts          # 設定（性格・3Dモデル・音声等）
+│   │       └── index.ts           # エクスポート統合
+│   ├── love/                     # 恋愛テーマ
+│   │   └── cat/                  # 猫キャラクター（将来）
+│   │       ├── Cat.tsx
+│   │       ├── CatModel.tsx
+│   │       ├── CatAnimations.tsx
+│   │       ├── CatVoice.tsx
+│   │       ├── CatBehavior.tsx
+│   │       ├── CatTypes.ts
+│   │       ├── config.ts          # 恋愛テーマ専用の性格設定
+│   │       └── index.ts
+│   └── career/                   # キャリアテーマ
+│       └── owl/                  # フクロウキャラクター（将来）
+│           ├── Owl.tsx
+│           ├── OwlModel.tsx
+│           ├── OwlAnimations.tsx
+│           ├── OwlVoice.tsx
+│           ├── OwlBehavior.tsx
+│           ├── OwlTypes.ts
+│           ├── config.ts          # キャリアテーマ専用の性格設定
+│           └── index.ts
+│
+└── lib/characters/               # キャラクター管理ロジック
+    ├── types.ts                  # 共通型定義（CharacterPersonaConfig等）
+    └── registry.ts               # キャラクターレジストリ・取得関数
 ```
 
 ### 機能別分割ルール
@@ -153,6 +187,54 @@ front/components/characters/
 - **責任**: キャラクター固有の行動、反応
 - **ファイル**: `{Character}Behavior.tsx`
 - **例**: `DogBehavior.tsx`, `CatBehavior.tsx`
+
+#### 5. Config (設定)
+- **責任**: キャラクターの人格設定、3Dモデルパス、音声ID、性格（personaCore）など
+- **ファイル**: `config.ts`
+- **配置**: 各キャラクターディレクトリ直下
+- **内容**: `CharacterPersonaConfig`型に従った設定オブジェクト
+- **例**: `mental/dog/config.ts`, `love/cat/config.ts`
+- **重要**: 性格設定（personaCore）は必ずここに配置（LLMプロンプトで使用）
+
+#### 6. Types (型定義)
+- **責任**: キャラクター固有の型定義（Props、State、Refs等）
+- **ファイル**: `{Character}Types.ts`
+- **例**: `DogTypes.ts`, `CatTypes.ts`
+- **注意**: 共通型定義は`lib/characters/types.ts`に配置
+
+### 設定管理とレジストリ
+
+#### 共通型定義
+- **配置**: `lib/characters/types.ts`
+- **内容**: `CharacterPersonaConfig`型（全キャラクター共通）
+- **用途**: キャラクター設定の型定義
+
+#### キャラクターレジストリ
+- **配置**: `lib/characters/registry.ts`
+- **責任**: 
+  - キャラクター設定の登録・取得
+  - 選択中のキャラクター設定の取得
+  - テーマ別キャラクターID一覧の取得
+- **主要関数**:
+  - `getCharacterConfig(characterId)`: IDから設定を取得
+  - `getSelectedCharacterConfig()`: 選択中のキャラクター設定を取得
+  - `registerCharacter(config)`: 新しいキャラクターを登録
+
+#### 設定ファイル（config.ts）
+- **配置**: 各キャラクターディレクトリ直下（例: `mental/dog/config.ts`）
+- **内容**: 
+  ```typescript
+  export const DogConfig: CharacterPersonaConfig = {
+    characterId: "mental-dog",
+    theme: "mental",
+    name: "みずき",
+    personaCore: `性格設定テキスト...`,
+    // その他の設定
+  };
+  ```
+- **重要**: 
+  - 性格設定（`personaCore`）は必ずここに配置
+  - LLMプロンプトで使用されるため、各キャラクターごとに独立
 
 ### キャラクターID体系
 - **命名規則**: `{theme}-{character}-{variant?}`
@@ -179,11 +261,28 @@ front/public/characters/
 ```
 
 ### キャラクター管理チェックリスト
-- [ ] テーマ別ディレクトリに配置されているか
-- [ ] 機能別にファイルが分割されているか
-- [ ] キャラクターIDが命名規則に従っているか
-- [ ] 静的ファイルが適切な場所に配置されているか
+
+#### 新規キャラクター追加時
+- [ ] テーマ別ディレクトリ（`mental/`, `love/`, `career/`）に配置されているか
+- [ ] 機能別にファイルが分割されているか（Model, Animations, Voice, Behavior）
+- [ ] `config.ts`に性格設定（`personaCore`）が含まれているか
+- [ ] キャラクターIDが命名規則（`{theme}-{character}`）に従っているか
+- [ ] `lib/characters/registry.ts`にキャラクターを登録したか
+- [ ] 静的ファイル（GLB等）が`public/characters/`の適切な場所に配置されているか
 - [ ] 共通機能は`shared/`ディレクトリに配置されているか
+- [ ] 共通型定義は`lib/characters/types.ts`を使用しているか
+
+#### 設定ファイル（config.ts）作成時
+- [ ] `CharacterPersonaConfig`型を使用しているか
+- [ ] `characterId`が正しい命名規則に従っているか
+- [ ] `personaCore`（性格設定）が含まれているか
+- [ ] `modelPath`が`public/characters/`からの相対パスになっているか
+- [ ] `theme`が正しく設定されているか
+
+#### レジストリ使用時
+- [ ] APIルートでは`getSelectedCharacterConfig()`を使用しているか
+- [ ] 直接`DogConfig`などをインポートしていないか（レジストリ経由を推奨）
+- [ ] 新しいキャラクターを追加したら`registry.ts`に登録したか
 
 ## 例外事項
 

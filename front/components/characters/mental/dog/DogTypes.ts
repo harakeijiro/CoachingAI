@@ -7,6 +7,10 @@ import React from "react";
 import * as THREE from "three";
 import { BaseCharacterProps, AnimationState, VoiceState, BehaviorState } from "../../shared/CharacterTypes";
 
+// =========================
+// 1. 犬キャラクター用の型定義
+// =========================
+
 // 犬キャラクター固有のプロパティ
 export interface DogProps extends BaseCharacterProps {
   isTalking?: boolean;
@@ -22,8 +26,8 @@ export interface DogAnimationState extends AnimationState {
 
 // 犬の音声状態
 export interface DogVoiceState extends VoiceState {
-  barkIntensity?: number;
-  whineLevel?: number;
+  barkIntensity?: number; // 吠えの強さ
+  whineLevel?: number;    // クゥーンみたいな甘え具合
 }
 
 // 犬の行動状態
@@ -70,20 +74,21 @@ export type GLTFResult = THREE.Object3D & {
   animations: GLTFAction[];
 };
 
-// 犬の3Dモデル参照
+// 犬の3Dモデル参照（リアルタイム制御で扱いたいもの）
 export interface DogModelRefs {
   groupRef: React.RefObject<THREE.Group>;
   mouseRef: React.RefObject<THREE.SkinnedMesh>;
   mouseInsideRef: React.RefObject<THREE.SkinnedMesh>;
 }
 
-// 犬の設定
-export interface DogConfig {
-  characterId: "mental-dog";
-  theme: "mental";
-  name: "ワンちゃんコーチ";
-  modelPath: "/characters/mental/dog/dog_speak_after2.glb";
-  voiceId: "dog-voice-001";
-  animations: ["idle", "talking", "listening", "happy", "sad"];
-  defaultPose: "idle";
-}
+// =========================
+// 2. 会話キャラとしての設定
+// =========================
+
+// 注: CharacterPersonaConfig型とDogConfig設定は以下のファイルに移動しました：
+// - 型定義: lib/characters/types.ts
+// - 設定: components/characters/mental/dog/config.ts
+// 
+// 互換性のため、エクスポートのみ維持しています。
+export type { CharacterPersonaConfig } from "@/lib/characters/types";
+export { DogConfig } from "./config";

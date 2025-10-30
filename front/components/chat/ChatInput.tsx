@@ -1,3 +1,9 @@
+/**
+ * チャット入力UIコンポーネント
+ * - テキスト入力欄とマイクボタン
+ * - 音声認識結果の表示
+ * - 入力欄の展開/縮小アニメーション
+ */
 "use client";
 
 import { useRef, useState } from "react";
@@ -84,7 +90,7 @@ export const ChatInput = ({
                   ? 'bg-white/20 dark:bg-gray-800/20 text-gray-900 dark:text-white hover:bg-white/30 dark:hover:bg-gray-800/30' 
                   : 'bg-red-400/30 dark:bg-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-400/40 dark:hover:bg-red-500/40'
               }`}
-              title={isVoiceEnabled ? "音声入力を無効にする" : "音声入力を有効にする"}
+              title={isVoiceEnabled ? "録音を停止して送信する" : "録音を開始する（押して話す）"}
               disabled={!supportsSpeech}
             >
               <svg 

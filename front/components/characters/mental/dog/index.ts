@@ -16,17 +16,9 @@ export type {
   DogVoiceState,
   DogBehaviorState,
   DogModelRefs,
-  DogConfig,
   GLTFResult,
 } from "./DogTypes";
 
 // 設定のエクスポート
-export const DOG_CONFIG = {
-  characterId: "mental-dog" as const,
-  theme: "mental" as const,
-  name: "ワンちゃんコーチ",
-  modelPath: "/characters/mental/dog/dog_speak_after2.glb",
-  voiceId: "dog-voice-001",
-  animations: ["idle", "talking", "listening", "happy", "sad"],
-  defaultPose: "idle",
-} as const;
+export { DogConfig } from "./config";
+export type { CharacterPersonaConfig } from "@/lib/characters/types";
