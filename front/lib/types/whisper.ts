@@ -13,6 +13,8 @@ export interface UseWhisperProps {
   onError: (error: string) => void;
   /** TTS終了後に呼ばれるコールバック（オプション） */
   onTtsEnd?: () => void;
+  /** マイクが有効かどうかをチェックする関数（オプション） */
+  isVoiceEnabled?: () => boolean;
 }
 
 /**

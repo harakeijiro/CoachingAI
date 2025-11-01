@@ -48,12 +48,23 @@ export interface AudioPipeline {
  * 
  * @param rawStream 元のMediaStream
  * @param config 設定（オプション）
+ * @param skipProcessing 処理をスキップする場合はtrue（音質向上のため）
  * @returns 音声処理パイプライン
  */
 export function createAudioProcessingPipeline(
   rawStream: MediaStream,
-  config: AudioPipelineConfig = {}
+  config: AudioPipelineConfig = {},
+  skipProcessing: boolean = false
 ): AudioPipeline {
+  // 処理をスキップする場合は元のストリームをそのまま返す（音質向上）
+  if (skipProcessing) {
+    return {
+      processedStream: rawStream,
+      rawStream,
+      audioContext: null,
+    };
+  }
+
   const {
     compressorThreshold = COMPRESSOR_THRESHOLD,
     compressorKnee = COMPRESSOR_KNEE,

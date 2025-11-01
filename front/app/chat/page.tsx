@@ -37,7 +37,13 @@ function ChatPage() {
   const [input, setInput] = useState("");
   const [voiceInput, setVoiceInput] = useState(""); // 音声認識専用の状態
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true); // デフォルトはON（自動録音開始）
+  const isVoiceEnabledRef = useRef(isVoiceEnabled); // refでも管理（useWhisperに渡すため）
   const [isContinuousListening, setIsContinuousListening] = useState(false); // 手動録音モード
+  
+  // isVoiceEnabledが変更されたらrefも更新
+  useEffect(() => {
+    isVoiceEnabledRef.current = isVoiceEnabled;
+  }, [isVoiceEnabled]);
   
   // STEP2-2: voiceMessages state を追加
   const [voiceMessages, setVoiceMessages] = useState<VoiceMessage[]>([]);
@@ -169,9 +175,16 @@ function ChatPage() {
       return;
     }
     
+    // 既存のタイマーがあればクリア（setStateの前に実行）
+    const existingTimer = messageClearTimersRef.current.get(messageId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      messageClearTimersRef.current.delete(messageId);
+    }
+    
     setVoiceMessages((prev) => {
       // 1. その id のメッセージがまだなければ、新規 push { id: messageId, role:"user", text, pending:true }
-      const existingIndex = prev.findIndex((msg) => msg.id !== messageId);
+      const existingIndex = prev.findIndex((msg) => msg.id === messageId);
       
       if (existingIndex === -1) {
         // 新規作成（仮メッセージ "…" の場合）
@@ -194,23 +207,6 @@ function ChatPage() {
         // 実テキストが来たら処理中フラグを解除（setStateの前で実行）
         if (!isPendingText) {
           processingMessageIdsRef.current.delete(messageId);
-          
-          // 既存のタイマーがあればクリア（更新されたメッセージには新しいタイマーを設定するため）
-          const existingTimer = messageClearTimersRef.current.get(messageId);
-          if (existingTimer) {
-            clearTimeout(existingTimer);
-            messageClearTimersRef.current.delete(messageId);
-          }
-          
-          // メッセージが確定（pending: false）になった時点から2秒後に削除
-          const timer = setTimeout(() => {
-            setVoiceMessages((prev) => {
-              return prev.filter((msg) => msg.id !== messageId);
-            });
-            messageClearTimersRef.current.delete(messageId);
-          }, 2000); // 2秒後
-          
-          messageClearTimersRef.current.set(messageId, timer);
         }
         
         newMessages[existingIndex] = {
@@ -221,6 +217,18 @@ function ChatPage() {
         return newMessages;
       }
     });
+    
+    // setStateの後にタイマーを設定（コールバック外で実行）
+    // 仮テキストまたは実テキストの場合、2秒後に削除するタイマーを設定
+    const timer = setTimeout(() => {
+      setVoiceMessages((prev) => {
+        return prev.filter((msg) => msg.id !== messageId);
+      });
+      messageClearTimersRef.current.delete(messageId);
+      processingMessageIdsRef.current.delete(messageId);
+    }, 2000); // 2秒後
+    
+    messageClearTimersRef.current.set(messageId, timer);
   }, []);
   
   // 3. useWhisper をここで呼ぶ（新しい形式）
@@ -246,6 +254,7 @@ function ChatPage() {
       // TTS終了後は自動録音を開始しない
       // ユーザーが明示的に話しかけるまで待つ
     },
+    isVoiceEnabled: () => isVoiceEnabledRef.current, // マイクのオン/オフ状態を渡す
   });
 
   // Whisperベースなので、restartRecognition、startRecognitionは不要（ダミーを提供）

@@ -40,6 +40,7 @@ export const useWhisper = ({
   onResult,
   onError,
   onTtsEnd,
+  isVoiceEnabled = () => true, // デフォルトは有効（後方互換性のため）
 }: UseWhisperProps): UseWhisperReturn => {
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -49,7 +50,8 @@ export const useWhisper = ({
   const [replyText, setReplyText] = useState<string>("");
   
   // Web Speech APIを使用してリアルタイム音声認識を取得
-  const { getLatestTranscript, clearTranscript, restartRecognition: restartWebSpeech } = useWebSpeech();
+  // isSpeakingの状態を渡して、TTS再生中は認識を停止するようにする
+  const { getLatestTranscript, clearTranscript, restartRecognition: restartWebSpeech } = useWebSpeech(() => isSpeaking);
   
   const recordingManagerRef = useRef<RecordingManager | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -63,6 +65,8 @@ export const useWhisper = ({
   const recordingAudioContextRef = useRef<AudioContext | null>(null);
   const waitingForVoiceRef = useRef(false); // TTS終了後、ユーザーの話し始めを待っているフラグ
   const voiceDetectionIntervalRef = useRef<NodeJS.Timeout | null>(null); // 話し始め検知用のインターバル
+  const waitingForVoiceStreamRef = useRef<MediaStream | null>(null); // 話し始め検知用のストリーム
+  const waitingForVoiceAudioContextRef = useRef<AudioContext | null>(null); // 話し始め検知用のAudioContext
 
   // 音声レベル監視を開始
   const startVoiceLevelMonitoring = (stream: MediaStream) => {
@@ -105,6 +109,16 @@ export const useWhisper = ({
       voiceDetectionIntervalRef.current = null;
     }
     
+    // 話し始め検知用のストリームとAudioContextもクリーンアップ
+    if (waitingForVoiceStreamRef.current) {
+      waitingForVoiceStreamRef.current.getTracks().forEach((track) => track.stop());
+      waitingForVoiceStreamRef.current = null;
+    }
+    if (waitingForVoiceAudioContextRef.current) {
+      waitingForVoiceAudioContextRef.current.close().catch(console.error);
+      waitingForVoiceAudioContextRef.current = null;
+    }
+    
     // 音声レベル監視を停止
     if (voiceLevelMonitorRef.current) {
       voiceLevelMonitorRef.current.stop();
@@ -114,6 +128,11 @@ export const useWhisper = ({
 
   // TTS終了後、ユーザーの話し始めを検知して録音を自動開始
   const startWaitingForVoice = async () => {
+    // マイクが無効の場合は何もしない
+    if (!isVoiceEnabled()) {
+      return;
+    }
+    
     // 既に待機中なら何もしない
     if (waitingForVoiceRef.current) {
       return;
@@ -146,8 +165,12 @@ export const useWhisper = ({
         }
       });
 
+      // ストリームへの参照を保持（stopRecording時に停止できるようにする）
+      waitingForVoiceStreamRef.current = stream;
+
       // 音声レベル監視用のAudioContextを作成
       const audioContext = new AudioContext();
+      waitingForVoiceAudioContextRef.current = audioContext; // AudioContextへの参照も保持
       const analyser = audioContext.createAnalyser();
       const microphone = audioContext.createMediaStreamSource(stream);
       
@@ -164,8 +187,14 @@ export const useWhisper = ({
           // 待機が解除された（既に録音開始済み）
           clearInterval(voiceDetectionIntervalRef.current!);
           voiceDetectionIntervalRef.current = null;
-          stream.getTracks().forEach((track) => track.stop());
-          audioContext.close().catch(console.error);
+          if (waitingForVoiceStreamRef.current) {
+            waitingForVoiceStreamRef.current.getTracks().forEach((track) => track.stop());
+            waitingForVoiceStreamRef.current = null;
+          }
+          if (waitingForVoiceAudioContextRef.current) {
+            waitingForVoiceAudioContextRef.current.close().catch(console.error);
+            waitingForVoiceAudioContextRef.current = null;
+          }
           return;
         }
 
@@ -179,8 +208,14 @@ export const useWhisper = ({
           // クリーンアップ
           clearInterval(voiceDetectionIntervalRef.current!);
           voiceDetectionIntervalRef.current = null;
-          stream.getTracks().forEach((track) => track.stop());
-          audioContext.close().catch(console.error);
+          if (waitingForVoiceStreamRef.current) {
+            waitingForVoiceStreamRef.current.getTracks().forEach((track) => track.stop());
+            waitingForVoiceStreamRef.current = null;
+          }
+          if (waitingForVoiceAudioContextRef.current) {
+            waitingForVoiceAudioContextRef.current.close().catch(console.error);
+            waitingForVoiceAudioContextRef.current = null;
+          }
           
           // 録音を開始
           startRecording();
@@ -190,10 +225,23 @@ export const useWhisper = ({
     } catch (error) {
       console.error("話し始め検知の開始に失敗:", error);
       waitingForVoiceRef.current = false;
+      if (waitingForVoiceStreamRef.current) {
+        waitingForVoiceStreamRef.current.getTracks().forEach((track) => track.stop());
+        waitingForVoiceStreamRef.current = null;
+      }
+      if (waitingForVoiceAudioContextRef.current) {
+        waitingForVoiceAudioContextRef.current.close().catch(console.error);
+        waitingForVoiceAudioContextRef.current = null;
+      }
     }
   };
 
   const startRecording = async () => {
+    // マイクが無効の場合は何もしない
+    if (!isVoiceEnabled()) {
+      return;
+    }
+    
     // 話し始め待機中なら解除
     if (waitingForVoiceRef.current) {
       waitingForVoiceRef.current = false;
@@ -225,6 +273,7 @@ export const useWhisper = ({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
+          autoGainControl: true, // 音量自動調整を追加（音量差を補正）
           // sampleRate: 16000, // ← 推奨: 外す（コメントアウト）
         }
       });
@@ -232,8 +281,9 @@ export const useWhisper = ({
       // 録音開始時にWeb Speech APIの結果をクリア（前回の認識結果をリセット）
       clearTranscript();
 
-      // 音声処理パイプラインを作成（小声を拾い、ピークは潰す）
-      const pipeline = createAudioProcessingPipeline(rawStream);
+      // 音声処理パイプラインを作成（処理を最小限にして音質向上）
+      // skipProcessing: true で DynamicsCompressor + GainNode をスキップ
+      const pipeline = createAudioProcessingPipeline(rawStream, {}, true);
       streamRef.current = pipeline.rawStream; // 物理ストップ用に元も保持
       recordingAudioContextRef.current = pipeline.audioContext; // クリーンアップ用に保持
 
@@ -265,6 +315,7 @@ export const useWhisper = ({
             streamRef.current?.getTracks().forEach((t) => t.stop());
             streamRef.current = null;
             // AudioContextのクリーンアップ（リーク防止）
+            // skipProcessing=trueの場合はaudioContextがnullなので、チェックしてからclose
             if (recordingAudioContextRef.current) {
               recordingAudioContextRef.current.close().catch(() => {});
               recordingAudioContextRef.current = null;
@@ -276,6 +327,10 @@ export const useWhisper = ({
             const formData = new FormData();
             formData.append("audio", audioBlob, "audio.webm");
             formData.append("sessionId", sessionId);
+            // Web Speech APIの結果をinitial_promptとしてWhisper APIに送信
+            // "…"の場合は空文字として扱う
+            const webSpeechText = heardText !== "…" ? heardText : "";
+            formData.append("webSpeechText", webSpeechText);
 
             const response = await fetch("/api/asr", {
               method: "POST",
@@ -479,6 +534,15 @@ export const useWhisper = ({
   const stopRecording = () => {
     if (!isRecording) return;
     
+    // 話し始め待機中なら解除（マイクオフ時に自動録音が開始されないようにする）
+    if (waitingForVoiceRef.current) {
+      waitingForVoiceRef.current = false;
+      if (voiceDetectionIntervalRef.current) {
+        clearInterval(voiceDetectionIntervalRef.current);
+        voiceDetectionIntervalRef.current = null;
+      }
+    }
+    
     // 音声レベル監視を停止
     stopVoiceLevelMonitoring();
     
@@ -496,6 +560,7 @@ export const useWhisper = ({
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     // AudioContextのクリーンアップ（リーク防止）
+    // skipProcessing=trueの場合はaudioContextがnullなので、チェックしてからclose
     if (recordingAudioContextRef.current) {
       recordingAudioContextRef.current.close().catch(() => {});
       recordingAudioContextRef.current = null;
@@ -507,6 +572,15 @@ export const useWhisper = ({
 
   const cancelRecording = () => {
     if (!isRecording) return;
+
+    // 話し始め待機中なら解除（マイクオフ時に自動録音が開始されないようにする）
+    if (waitingForVoiceRef.current) {
+      waitingForVoiceRef.current = false;
+      if (voiceDetectionIntervalRef.current) {
+        clearInterval(voiceDetectionIntervalRef.current);
+        voiceDetectionIntervalRef.current = null;
+      }
+    }
 
     // 音声レベル監視を停止
     stopVoiceLevelMonitoring();
@@ -521,6 +595,7 @@ export const useWhisper = ({
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     // AudioContextのクリーンアップ（リーク防止）
+    // skipProcessing=trueの場合はaudioContextがnullなので、チェックしてからclose
     if (recordingAudioContextRef.current) {
       recordingAudioContextRef.current.close().catch(() => {});
       recordingAudioContextRef.current = null;

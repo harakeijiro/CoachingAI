@@ -59,7 +59,7 @@ declare global {
   }
 }
 
-export const useWebSpeech = () => {
+export const useWebSpeech = (isSpeaking?: () => boolean) => {
   const latestTranscriptRef = useRef<string>("");
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const shouldRestartRef = useRef<boolean>(true); // 自動再起動フラグ
@@ -98,6 +98,12 @@ export const useWebSpeech = () => {
     recognition.interimResults = true;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      // キャラクターが話している間は結果を無視（誤認識を防ぐ）
+      if (isSpeaking && isSpeaking()) {
+        console.log("[useWebSpeech] キャラが話しているため認識結果を無視");
+        return;
+      }
+      
       let transcript = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         transcript += event.results[i][0].transcript;
@@ -159,7 +165,7 @@ export const useWebSpeech = () => {
         }, 100);
       }
     }
-  }, []);
+  }, [isSpeaking]);
 
   const stopRecognition = () => {
     shouldRestartRef.current = false;

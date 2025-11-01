@@ -52,9 +52,22 @@ export function createRecordingManager(
     }
 
     try {
+      // 最適化された録音フォーマット（Opusコーデック）
+      const getOptimalMimeType = (): string => {
+        // 優先順位: Opus > WebM > デフォルト
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          return 'audio/webm;codecs=opus';
+        }
+        if (MediaRecorder.isTypeSupported('audio/webm')) {
+          return 'audio/webm';
+        }
+        // フォールバック（通常は到達しない）
+        return 'audio/webm';
+      };
+
       // MediaRecorderの設定
       mediaRecorder = new MediaRecorder(processedStream, {
-        mimeType: "audio/webm",
+        mimeType: getOptimalMimeType(),
       });
 
       // 録音データをクリア

@@ -73,3 +73,6 @@ export type UpdateProfileRequest = {
   avatar_url?: string;
   locale?: string;
 };
+
+// メモリ関連の型をエクスポート
+export * from "./memory";
