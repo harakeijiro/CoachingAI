@@ -12,10 +12,6 @@ export async function POST(req: Request) {
     // Cookieを読み取る（認証情報を取得するため）
     const cookieStore = await cookies();
     
-    // デバッグ: Cookieを確認
-    const cookieNames = cookieStore.getAll().map(c => c.name);
-    console.log("Memory save API - Available cookies:", cookieNames);
-    
     const body = await req.json();
     const { memories, characterId, sessionId } = body;
 

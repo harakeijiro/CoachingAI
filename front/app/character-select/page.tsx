@@ -16,6 +16,44 @@ export default function CharacterSelectPage() {
   const [isRequestingMic, setIsRequestingMic] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
 
+  // メモリ取得関数（チャット画面遷移前に呼び出す）
+  const loadMemoriesBeforeTransition = async (): Promise<void> => {
+    try {
+      const response = await fetch("/api/memory/load", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.success && result.data && Array.isArray(result.data)) {
+          // メモリが空でない場合のみlocalStorageに保存
+          if (result.data.length > 0) {
+            // メモリをlocalStorageに保存（チャット画面で使用）
+            localStorage.setItem(
+              "coaching_ai_session_memories",
+              JSON.stringify(result.data)
+            );
+          } else {
+            // 空配列の場合はlocalStorageから削除（既存のキャッシュをクリア）
+            localStorage.removeItem("coaching_ai_session_memories");
+          }
+        } else {
+          // メモリが見つからない場合もlocalStorageから削除
+          localStorage.removeItem("coaching_ai_session_memories");
+        }
+      } else {
+        // エラー時もlocalStorageから削除（既存のキャッシュをクリア）
+        localStorage.removeItem("coaching_ai_session_memories");
+      }
+    } catch (error) {
+      // エラー時もlocalStorageから削除（既存のキャッシュをクリア）
+      localStorage.removeItem("coaching_ai_session_memories");
+      // エラー時も遷移は続行（チャット画面で再取得）
+    }
+  };
+
   // キャラが選ばれたら権限状態をチェックして適切な処理を行う
   const handleCharacterSelect = async (charName: string) => {
     // 現在の権限だけ見る（マイクを実際に起動しない）
@@ -29,7 +67,9 @@ export default function CharacterSelectPage() {
     }
 
     if (micState === "granted") {
-      // すでに許可済み → モーダル出さないで即遷移
+      // すでに許可済み → メモリを取得してから遷移
+      await loadMemoriesBeforeTransition();
+      
       localStorage.setItem(
         "coaching_ai_selected_character_id",
         generateCharacterId(theme, charName)
@@ -46,7 +86,9 @@ export default function CharacterSelectPage() {
         const result = await requestMicrophonePermission();
         
         if (result.success && result.stream) {
-          // 許可成功したらそのまま遷移
+          // 許可成功したらメモリを取得してから遷移
+          await loadMemoriesBeforeTransition();
+          
           localStorage.setItem(
             "coaching_ai_selected_character_id",
             generateCharacterId(theme, charName)
@@ -72,7 +114,9 @@ export default function CharacterSelectPage() {
     }
 
     if (micState === "denied") {
-      // 完全拒否されてる人 → キャラクター情報を保存してチャット画面に遷移
+      // 完全拒否されてる人 → メモリを取得してからキャラクター情報を保存してチャット画面に遷移
+      await loadMemoriesBeforeTransition();
+      
       localStorage.setItem(
         "coaching_ai_selected_character_id",
         generateCharacterId(theme, charName)
@@ -101,6 +145,9 @@ export default function CharacterSelectPage() {
     setIsRequestingMic(false);
 
     if (result.success && result.stream) {
+      // メモリを取得してから遷移
+      await loadMemoriesBeforeTransition();
+      
       // 好きな形で保存する：
       // 1. ローカルストレージにキャラ情報
       localStorage.setItem(
@@ -127,7 +174,10 @@ export default function CharacterSelectPage() {
   };
 
   // マイクなしで続ける
-  const handleContinueWithoutMic = () => {
+  const handleContinueWithoutMic = async () => {
+    // メモリを取得してから遷移（非同期だが、エラー時も遷移は続行）
+    await loadMemoriesBeforeTransition();
+    
     localStorage.setItem(
       "coaching_ai_selected_character_id",
       generateCharacterId(theme, selectedCharacter)

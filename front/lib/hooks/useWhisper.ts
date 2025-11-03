@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { getOrCreateSessionId } from "@/lib/utils/session";
 import { useWebSpeech } from "@/lib/hooks/useWebSpeech";
 import {
@@ -41,6 +41,8 @@ export const useWhisper = ({
   onError,
   onTtsEnd,
   isVoiceEnabled = () => true, // デフォルトは有効（後方互換性のため）
+  memories = [], // セッション開始時に取得したメモリ（ステップ1: 追加）
+  onMemoryUpdated, // メモリが更新された可能性がある場合のコールバック
 }: UseWhisperProps): UseWhisperReturn => {
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -48,6 +50,14 @@ export const useWhisper = ({
   const [sessionId] = useState(() => getOrCreateSessionId());
   const [userText, setUserText] = useState<string>("");
   const [replyText, setReplyText] = useState<string>("");
+  
+  // メモリをrefで保持（常に最新の値を参照するため）
+  const memoriesRef = useRef<UseWhisperProps["memories"]>(memories);
+  
+  // メモリプロップが変更されたらrefを更新
+  useEffect(() => {
+    memoriesRef.current = memories;
+  }, [memories]);
   
   // Web Speech APIを使用してリアルタイム音声認識を取得
   // isSpeakingの状態を渡して、TTS再生中は認識を停止するようにする
@@ -236,9 +246,9 @@ export const useWhisper = ({
     }
   };
 
-  const startRecording = async () => {
-    // マイクが無効の場合は何もしない
-    if (!isVoiceEnabled()) {
+  const startRecording = async (forceStart: boolean = false) => {
+    // マイクが無効の場合は何もしない（forceStartの場合はスキップ - 手動でONにした場合は強制的に開始）
+    if (!forceStart && !isVoiceEnabled()) {
       return;
     }
     
@@ -251,8 +261,8 @@ export const useWhisper = ({
       }
     }
     
-    // 録音禁止タイミングをチェック
-    if (!canRecord) {
+    // 録音禁止タイミングをチェック（forceStartの場合はスキップ）
+    if (!forceStart && !canRecord) {
       return;
     }
     
@@ -331,6 +341,11 @@ export const useWhisper = ({
             // "…"の場合は空文字として扱う
             const webSpeechText = heardText !== "…" ? heardText : "";
             formData.append("webSpeechText", webSpeechText);
+            // メモリをFormDataに含める（refから最新のメモリを取得）
+            const currentMemories = memoriesRef.current || [];
+            if (currentMemories && Array.isArray(currentMemories) && currentMemories.length > 0) {
+              formData.append("memories", JSON.stringify(currentMemories));
+            }
 
             const response = await fetch("/api/asr", {
               method: "POST",
@@ -354,6 +369,14 @@ export const useWhisper = ({
 
             const data = await response.json();
 
+            // メモリが更新された可能性がある場合、少し待ってからコールバックを呼ぶ
+            if (data.memoryMayBeUpdated && onMemoryUpdated) {
+              // メモリ保存は非同期で実行されているため、少し待ってから通知する
+              setTimeout(() => {
+                onMemoryUpdated();
+              }, 1000); // 1秒待機（メモリ保存が完了する時間を考慮）
+            }
+
             // サーバ側で棄却された場合（drop: true）の処理
             if (data.drop) {
               console.log("[useWhisper] Server rejected audio (too short or no speech)");
@@ -365,6 +388,72 @@ export const useWhisper = ({
                 currentMessageIdRef.current = null;
               }
               isProcessingRef.current = false;
+              
+              // unclearの場合は、返答があれば再生（「聞こえませんでした」などのメッセージ）
+              if (data.unclear && data.replyText && data.audioData) {
+                setIsSpeaking(true);
+                
+                try {
+                  const audioBytes = Uint8Array.from(atob(data.audioData), c => c.charCodeAt(0));
+                  const blob = new Blob([audioBytes], { type: "audio/wav" });
+                  const url = URL.createObjectURL(blob);
+                  const audio = new Audio(url);
+
+                  audio.onended = () => {
+                    URL.revokeObjectURL(url);
+                    setIsSpeaking(false);
+                    
+                    onTtsEnd?.();
+                    
+                    // TTS終了後、少し待機してから録音可能にする
+                    setTimeout(() => {
+                      setCanRecord(true);
+                      // さらに少し待機してから、ユーザーの話し始めを検知して録音を自動開始
+                      setTimeout(() => {
+                        startWaitingForVoice();
+                      }, 100);
+                    }, TTS_END_DELAY);
+                  };
+
+                  audio.onerror = (err) => {
+                    console.error("Step 5: 音声再生エラー:", err);
+                    URL.revokeObjectURL(url);
+                    setIsSpeaking(false);
+                    
+                    setTimeout(() => {
+                      setCanRecord(true);
+                      setTimeout(() => {
+                        startWaitingForVoice();
+                      }, 100);
+                    }, TTS_END_DELAY);
+                  };
+
+                  audio.play().catch((error) => {
+                    console.error("Step 5: 音声再生失敗:", error);
+                    setIsSpeaking(false);
+                    
+                    setTimeout(() => {
+                      setCanRecord(true);
+                      setTimeout(() => {
+                        startWaitingForVoice();
+                      }, 100);
+                    }, TTS_END_DELAY);
+                  });
+                } catch (error) {
+                  console.error("Step 5: 音声再生失敗:", error);
+                  setIsSpeaking(false);
+                  setCanRecord(true);
+                  
+                  setTimeout(() => {
+                    startWaitingForVoice();
+                  }, 100);
+                }
+              } else {
+                // unclearでない場合は録音を再開（ユーザーの話し始めを検知）
+                setTimeout(() => {
+                  startWaitingForVoice();
+                }, 100);
+              }
               return;
             }
 
@@ -445,12 +534,24 @@ export const useWhisper = ({
                   startWaitingForVoice();
                 }, 100);
               }
-            } else {
-              // TTSない時
+            } else if (data.replyText) {
+              // 返答テキストはあるが、音声データがない場合
+              // （TTS生成に失敗したが、返答は生成されている）
+              console.warn("[useWhisper] Reply text received but no audio data");
               setIsSpeaking(false);
               setCanRecord(true);
               
-              // TTSがない場合も、少し待機してからユーザーの話し始めを検知して録音を自動開始
+              // 少し待機してからユーザーの話し始めを検知して録音を自動開始
+              setTimeout(() => {
+                startWaitingForVoice();
+              }, 100);
+            } else {
+              // 返答がない場合（エラーまたは空の返答）
+              console.warn("[useWhisper] No reply text or audio data received");
+              setIsSpeaking(false);
+              setCanRecord(true);
+              
+              // 少し待機してからユーザーの話し始めを検知して録音を自動開始
               setTimeout(() => {
                 startWaitingForVoice();
               }, 100);

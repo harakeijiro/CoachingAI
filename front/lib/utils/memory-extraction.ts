@@ -4,6 +4,7 @@
  */
 
 import { ExtractedMemory, MemoryType } from "@/lib/types/memory";
+import { deduplicateWithinArray } from "./memory-deduplication";
 
 /**
  * LLMプロンプト用の会話履歴の型
@@ -267,7 +268,12 @@ export async function extractMemoriesFromConversation(
       return [];
     }
 
-    return parseExtractedMemories(text);
+    const extractedMemories = parseExtractedMemories(text);
+    
+    // 抽出されたメモリ同士の重複を統合（同じトピックのメモリを1つにまとめる）
+    const deduplicatedMemories = deduplicateWithinArray(extractedMemories);
+    
+    return deduplicatedMemories;
   } catch (error) {
     console.error("Error extracting memories:", error);
     throw error;

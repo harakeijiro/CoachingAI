@@ -15,6 +15,15 @@ export interface UseWhisperProps {
   onTtsEnd?: () => void;
   /** マイクが有効かどうかをチェックする関数（オプション） */
   isVoiceEnabled?: () => boolean;
+  /** セッション開始時に取得したメモリ（オプション） */
+  memories?: Array<{
+    memory_id: string;
+    topic: string;
+    content: string;
+    [key: string]: any;
+  }>;
+  /** メモリが更新された可能性がある場合のコールバック（オプション） */
+  onMemoryUpdated?: () => void;
 }
 
 /**
@@ -26,7 +35,7 @@ export interface UseWhisperReturn {
   /** キャラクターが話しているかどうか */
   isSpeaking: boolean;
   /** 録音を開始する関数 */
-  startRecording: () => Promise<void>;
+  startRecording: (forceStart?: boolean) => Promise<void>;
   /** 録音を停止する関数 */
   stopRecording: () => void;
   /** 録音をキャンセルする関数 */

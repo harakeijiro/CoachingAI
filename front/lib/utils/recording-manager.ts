@@ -95,9 +95,12 @@ export function createRecordingManager(
 
         // 録音データのサイズを確認（空の録音を防ぐ）
         if (audioBlob.size < MIN_AUDIO_SIZE) {
-          callbacks.onError?.(
-            new Error(`Audio too short: ${audioBlob.size} bytes`)
+          // エラーではなく警告として扱う
+          console.warn(
+            `[recording-manager] Audio shorter than expected: ${audioBlob.size} bytes (minimum: ${MIN_AUDIO_SIZE} bytes)`
           );
+          // 警告として記録するが、エラーハンドラは呼ばない
+          // 処理は続行せずに終了（録音が短すぎる場合は送信しない）
           return;
         }
 

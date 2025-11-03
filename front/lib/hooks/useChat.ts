@@ -8,6 +8,7 @@
 "use client";
 
 import { useState } from "react";
+import type { Memory } from "@/lib/types/memory";
 
 export type Message = {
   id: string;
@@ -21,6 +22,7 @@ interface UseChatProps {
   speak: (text: string) => void;
   supportsTTS: boolean;
   restartRecognition: (delay: number, context: string) => void;
+  memories?: Memory[]; // セッション開始時に取得したメモリ（ステップ3: 追加）
 }
 
 export const useChat = ({
@@ -29,6 +31,7 @@ export const useChat = ({
   speak,
   supportsTTS,
   restartRecognition,
+  memories = [], // デフォルトは空配列（ステップ3: 追加）
 }: UseChatProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,6 +64,7 @@ export const useChat = ({
             role: m.role,
             content: m.content,
           })),
+          memories: memories, // メモリをリクエストに含める（ステップ3: 追加）
         }),
       });
 

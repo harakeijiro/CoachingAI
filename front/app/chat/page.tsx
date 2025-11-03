@@ -19,6 +19,7 @@ import { useTTS } from "@/lib/hooks/useTTS";
 import { useChat, type Message } from "@/lib/hooks/useChat";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { MicrophonePermissionPopup } from "@/components/chat/MicrophonePermissionPopup";
+import type { Memory } from "@/lib/types/memory";
 
 
 
@@ -63,6 +64,9 @@ function ChatPage() {
   // マイク状態監視用
   const [showMicPopup, setShowMicPopup] = useState(false);
   const [micPopupShown, setMicPopupShown] = useState(false); // 一度表示されたかどうかのフラグ
+
+  // セッション開始時のメモリ管理（ステップ1: stateに保持）
+  const [sessionMemories, setSessionMemories] = useState<Memory[]>([]);
 
   // 追加：発話テキストの整形・重複ガード・（音声経路でも利用）
   const normalize = (t: string) => t.replace(/\s+/g, " ").trim();
@@ -255,6 +259,27 @@ function ChatPage() {
       // ユーザーが明示的に話しかけるまで待つ
     },
     isVoiceEnabled: () => isVoiceEnabledRef.current, // マイクのオン/オフ状態を渡す
+    memories: sessionMemories, // セッション開始時に取得したメモリを渡す（ステップ2: 追加）
+    onMemoryUpdated: async () => {
+      // メモリが更新された可能性がある場合、メモリを再取得
+      try {
+        const response = await fetch("/api/memory/load", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          
+          if (result.success && result.data && Array.isArray(result.data)) {
+            setSessionMemories(result.data);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to reload memories:", error);
+        // エラー時は既存のメモリを維持
+      }
+    },
   });
 
   // Whisperベースなので、restartRecognition、startRecognitionは不要（ダミーを提供）
@@ -300,6 +325,7 @@ function ChatPage() {
     speak,
     supportsTTS,
     restartRecognition,    // ← 本物
+    memories: sessionMemories, // セッション開始時に取得したメモリを渡す（ステップ3: 追加）
   });
 
   // 注: 古い handleSpeechResult と onResultRef は削除しました
@@ -325,6 +351,58 @@ function ChatPage() {
       messageClearTimersRef.current.clear();
     };
   }, []);
+
+  // セッション開始時にメモリを取得（キャラクター選択画面で取得済みの場合はlocalStorageから読み込み）
+  useEffect(() => {
+    const loadMemories = async () => {
+      try {
+        // まずlocalStorageを確認（キャラクター選択画面で取得済みの場合）
+        const cachedMemories = localStorage.getItem("coaching_ai_session_memories");
+        
+        if (cachedMemories) {
+          try {
+            const memories = JSON.parse(cachedMemories);
+            
+            if (Array.isArray(memories) && memories.length > 0) {
+              setSessionMemories(memories);
+              // localStorageから削除（次回はAPIから取得）
+              localStorage.removeItem("coaching_ai_session_memories");
+              return;
+            } else {
+              // 空配列の場合はlocalStorageから削除してAPIから取得
+              localStorage.removeItem("coaching_ai_session_memories");
+            }
+          } catch (parseError) {
+            // パースエラー時はAPIから取得
+            localStorage.removeItem("coaching_ai_session_memories");
+          }
+        }
+
+        // localStorageにない場合、またはパースエラー時はAPIから取得
+        const response = await fetch("/api/memory/load", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          
+          if (result.success && result.data && Array.isArray(result.data)) {
+            setSessionMemories(result.data);
+          } else {
+            setSessionMemories([]);
+          }
+        } else {
+          setSessionMemories([]);
+        }
+      } catch (error) {
+        // エラー時は空配列のまま続行（会話は続行可能）
+        setSessionMemories([]);
+      }
+    };
+
+    loadMemories();
+  }, []); // 初回レンダリング時のみ実行
 
   // ユーザーインタラクション検知用
   const [hasUserInteracted, setHasUserInteracted] = useState(true); // 最初からインタラクション済みとして扱う
@@ -379,48 +457,17 @@ function ChatPage() {
           if (micState === "granted") {
             // 既に許可済みの場合は自動的にインタラクションを検知
             setHasUserInteracted(true);
-            
-            // 自動挨拶を無効化 - メッセージもTTSも実行しない
-            // const greetingMessage: Message = {
-            //   id: Date.now().toString(),
-            //   role: "assistant",
-            //   content: "こんにちは！話しかけてみてください。何でもお聞かせください。",
-            // };
-            // setMessages([greetingMessage]);
-            
-            // TTSで挨拶を読み上げない
-            // if (supportsTTS) {
-            //   setTimeout(() => {
-            //     speak(greetingMessage.content);
-            //   }, 1000);
-            // }
           } else {
             // 許可されていない場合は通常のイベントリスナーを設定
             document.addEventListener("click", handleUserInteraction);
             document.addEventListener("keydown", handleUserInteraction);
             document.addEventListener("touchstart", handleUserInteraction);
-            
-            // 自動挨拶を無効化 - メッセージを表示しない
-            // const greetingMessage: Message = {
-            //   id: Date.now().toString(),
-            //   role: "assistant",
-            //   content: "こんにちは！画面をクリックしてから話しかけてみてください。",
-            // };
-            // setMessages([greetingMessage]);
           }
         } catch (error) {
           // エラーの場合は通常のイベントリスナーを設定
           document.addEventListener("click", handleUserInteraction);
           document.addEventListener("keydown", handleUserInteraction);
           document.addEventListener("touchstart", handleUserInteraction);
-          
-          // 自動挨拶を無効化 - エラー時もメッセージを表示しない
-          // const greetingMessage: Message = {
-          //   id: Date.now().toString(),
-          //   role: "assistant",
-          //   content: "こんにちは！画面をクリックしてから話しかけてみてください。",
-          // };
-          // setMessages([greetingMessage]);
         }
       }, 0); // 即座に自動チェック
     };
@@ -575,18 +622,25 @@ function ChatPage() {
       setIsVoiceEnabled(false);
     } else {
       // 🟢 現在OFF → ONにする（録音開始）
-      // 1. マイク許可チェック/確保
+      // 1. refを先に更新（startRecordingがisVoiceEnabled()をチェックする前に反映させるため）
+      isVoiceEnabledRef.current = true;
+      
+      // 2. マイク許可チェック/確保
       const result = await requestMicrophonePermission();
       if (!result.success || !result.stream) {
+        // 許可に失敗した場合はrefも元に戻す
+        isVoiceEnabledRef.current = false;
         alert(result.error || "マイクの許可が必要です");
         return;
       }
 
-      // 2. 録音開始をトライ（awaitして完了を待つ）
+      // 3. 録音開始をトライ（forceStart: true でクールダウンをスキップ）
       try {
-        await startRecording();
-        setIsVoiceEnabled(true);
+        await startRecording(true); // forceStart: true を渡してクールダウンをスキップ
+        setIsVoiceEnabled(true); // 状態も更新（useEffectでrefに反映される）
       } catch (error) {
+        // エラーが発生した場合はrefも元に戻す
+        isVoiceEnabledRef.current = false;
         console.error("録音開始に失敗:", error);
         alert("録音の開始に失敗しました");
       }

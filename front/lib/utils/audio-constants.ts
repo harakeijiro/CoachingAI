@@ -11,7 +11,7 @@
 export const VOICE_THRESHOLD = 40;
 
 /** 静寂検知の連続時間（ミリ秒） */
-export const SILENCE_MS = 1200; // 1000 + 200msテール余白
+export const SILENCE_MS = 1500; // 1.5秒
 
 /** 音声レベルチェック間隔（ミリ秒） */
 export const POLL_MS = 60;
