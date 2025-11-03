@@ -133,6 +133,11 @@ dist
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+!.yarnrc
+
+# npm/yarn cache (プロジェクト内)
+node_modules/.cache/
+.yarn/cache/
 
 # Vite logs files
 vite.config.js.timestamp-*
@@ -160,3 +165,6 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Karabiner-Elements log files (アプリケーションログ)
+.local*/
