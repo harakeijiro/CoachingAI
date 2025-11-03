@@ -218,6 +218,7 @@ async function extractAndSaveMemoriesFromChat(
   try {
     // メッセージ数が少ない場合はスキップ（最低2メッセージ以上 - 1往復分）
     if (messages.length < 2) {
+      console.log("Chat API - Memory extraction skipped: too few messages");
       return;
     }
 
@@ -227,8 +228,17 @@ async function extractAndSaveMemoriesFromChat(
     const MEMORY_EXTRACTION_THRESHOLD = 3;
     
     if (userMessageCount === 0 || userMessageCount % MEMORY_EXTRACTION_THRESHOLD !== 0) {
+      console.log("Chat API - Memory extraction skipped: not at threshold", {
+        userMessageCount,
+        threshold: MEMORY_EXTRACTION_THRESHOLD,
+      });
       return;
     }
+
+    console.log("Chat API - Starting memory extraction...", {
+      totalMessages: messages.length,
+      userMessageCount,
+    });
 
     // 会話履歴をConversationMessage[]に変換
     const conversationHistory: ConversationMessage[] = messages.map((m) => ({
@@ -240,8 +250,15 @@ async function extractAndSaveMemoriesFromChat(
     const extractedMemories = await extractMemoriesFromConversation(conversationHistory);
     
     if (extractedMemories.length === 0) {
+      console.log("Chat API - No memories extracted");
       return;
     }
+
+    // シンプルな形式でメモリを表示
+    const memoryTexts = extractedMemories.map(
+      (m) => `- ${m.topic}: ${m.content}`
+    );
+    console.log(`Chat API - Extracted ${extractedMemories.length} memories:\n${memoryTexts.join("\n")}`);
 
     // メモリを保存（内部APIエンドポイントを使用）
     const baseUrl = process.env.VERCEL_URL 
@@ -271,6 +288,16 @@ async function extractAndSaveMemoriesFromChat(
     }
 
     const saveResult = await saveResponse.json();
+    
+    // 保存結果をシンプルに表示
+    if (saveResult.success && saveResult.data && Array.isArray(saveResult.data) && saveResult.data.length > 0) {
+      const savedMemoryTexts = saveResult.data.map(
+        (m: Memory) => `- ${m.topic}: ${m.content}`
+      );
+      console.log(`Chat API - Memories saved (${saveResult.data.length}件):\n${savedMemoryTexts.join("\n")}`);
+    } else {
+      console.log(`Chat API - ${saveResult.message || "Memories saved"}`);
+    }
   } catch (error) {
     // エラーはログに記録するのみ（メインの応答には影響しない）
     console.error("Chat API - Memory extraction error:", error);

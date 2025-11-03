@@ -45,11 +45,14 @@ export async function POST(req: Request) {
       return Response.json({ error: "No audio file" }, { status: 400 });
     }
 
+    console.log("Step 4: Whisper API called, audio size:", audioFile.size, "bytes");
+
     // 0) 音声長チェック（0.5s未満は破棄）
     // webmファイルの場合、おおよそのサイズから推測
     // 48kHz, 16bit, モノラル = 約12KB/秒、ステレオ = 約24KB/秒
     // 安全のため、最小10KB（約0.5秒相当）以下は棄却
     if (audioFile.size < MIN_AUDIO_SIZE) {
+      console.log("Step 4: Audio too short, rejecting. Size:", audioFile.size);
       return Response.json({ 
         userText: "", 
         replyText: "",
@@ -81,6 +84,10 @@ export async function POST(req: Request) {
       // 2文字以上200文字未満で使用（以前は5文字以上100文字未満だったが、緩和して精度向上）
       if (webSpeechTrimmed.length >= 2 && webSpeechTrimmed.length < 200) {
         whisperFormData.append("prompt", webSpeechTrimmed);
+        console.log("Step 4: Using Web Speech result as initial_prompt:", webSpeechTrimmed);
+      } else {
+        console.log("Step 4: Web Speech result too short/long, skipping prompt:", webSpeechTrimmed.length);
+        // promptパラメータを追加しない（空文字列は送信しない）
       }
     }
     // webSpeechTextが無い場合もpromptパラメータを追加しない
@@ -110,6 +117,8 @@ export async function POST(req: Request) {
     const whisperData = await response.json();
     let userText = whisperData.text || "";
 
+    console.log("Step 4: Transcription result:", userText);
+
     // Web Speech APIとWhisper APIの結果を比較（Whisperのハルシネーション検出）
     // Web Speech APIの結果が存在し、かつWhisper APIの結果と大きく異なる場合は、Web Speech APIを優先
     if (webSpeechText && webSpeechText.trim() && webSpeechText !== "…") {
@@ -138,12 +147,17 @@ export async function POST(req: Request) {
       
       // 類似度が0.3未満の場合、Web Speech APIの結果を優先（Whisperが誤認識している可能性が高い）
       if (similarity < 0.3 && webSpeechTrimmed.length >= 3) {
+        console.log("Step 4: Whisper hallucination detected, using Web Speech result instead.");
+        console.log(`Step 4: Similarity: ${similarity.toFixed(2)}`);
+        console.log(`Step 4: Web Speech: "${webSpeechTrimmed}"`);
+        console.log(`Step 4: Whisper: "${userText}"`);
         userText = webSpeechTrimmed;
       }
     }
 
     // 2) 無音ハルシネーションの棄却（短すぎる文字列や空白のみを棄却）
     if (!userText || userText.trim().length < 2) {
+      console.log("Step 4: Transcription too short or empty, rejecting");
       return Response.json({ 
         userText: "", 
         replyText: "",
@@ -184,6 +198,8 @@ export async function POST(req: Request) {
     }
 
     // ====== Step 4: LLM連携 ======
+    console.log("Step 4: Calling LLM...");
+
     // セッション履歴を管理
     if (!sessions.has(sessionId)) {
       sessions.set(sessionId, []);
@@ -305,6 +321,8 @@ ${contextMessages}
     const geminiData = await geminiResponse.json();
     const replyText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
+    console.log("Step 4: LLM reply:", replyText);
+
     // 返答を履歴に追加
     history.push({ role: "assistant", content: replyText });
 
@@ -335,6 +353,8 @@ ${contextMessages}
     }
 
     // ====== Step 5: TTS音声生成 ======
+    console.log("Step 5: Generating TTS...");
+    
     const cartesiaApiKey = process.env.CARTESIA_API_KEY;
     const version = process.env.CARTESIA_VERSION || "2025-04-16";
     
@@ -398,6 +418,8 @@ ${contextMessages}
       }
       const base64Audio = btoa(binaryString);
 
+      console.log("Step 5: TTS generated, size:", audioBytes.byteLength, "bytes");
+
       return Response.json({ 
         userText: isUnclear ? "" : userText,
         replyText,
@@ -437,6 +459,8 @@ async function extractAndSaveMemories(
   originalReq: Request
 ): Promise<void> {
   try {
+    console.log("Step 4.5: Starting memory extraction...");
+
     // 会話履歴をConversationMessage[]に変換
     const conversationHistory: ConversationMessage[] = history.map((h) => ({
       role: h.role as "user" | "assistant",
@@ -447,8 +471,15 @@ async function extractAndSaveMemories(
     const extractedMemories = await extractMemoriesFromConversation(conversationHistory);
     
     if (extractedMemories.length === 0) {
+      console.log("Step 4.5: No memories extracted");
       return;
     }
+
+    // シンプルな形式でメモリを表示
+    const memoryTexts = extractedMemories.map(
+      (m) => `- ${m.topic}: ${m.content}`
+    );
+    console.log(`Step 4.5: Extracted ${extractedMemories.length} memories:\n${memoryTexts.join("\n")}`);
 
     // メモリを保存（Server Actionを呼び出すため、内部APIエンドポイントを使用）
     // Edge Runtimeから直接Server Actionを呼び出せないため、内部APIエンドポイントを作成
@@ -481,6 +512,16 @@ async function extractAndSaveMemories(
     }
 
     const saveResult = await saveResponse.json();
+    
+    // 保存結果をシンプルに表示
+    if (saveResult.success && saveResult.data && Array.isArray(saveResult.data) && saveResult.data.length > 0) {
+      const savedMemoryTexts = saveResult.data.map(
+        (m: Memory) => `- ${m.topic}: ${m.content}`
+      );
+      console.log(`Step 4.5: Memories saved (${saveResult.data.length}件):\n${savedMemoryTexts.join("\n")}`);
+    } else {
+      console.log(`Step 4.5: ${saveResult.message || "Memories saved"}`);
+    }
   } catch (error) {
     // エラーはログに記録するのみ（メインの応答には影響しない）
     console.error("Step 4.5: Memory extraction error:", error);
